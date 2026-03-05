@@ -20,6 +20,7 @@ import {
   getEmployees,
   getShiftsByWeek,
   isSupabaseConfigured,
+  updateShift,
 } from "@/lib/supabase";
 import type { Employee, Shift } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -108,12 +109,20 @@ export default function DaySchedulePage() {
   const [error, setError] = useState<string | null>(null);
   const [calendarDate, setCalendarDate] = useState(selectedDay);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingShift, setEditingShift] = useState<Shift | null>(null);
   const [saving, setSaving] = useState(false);
   const [addForm, setAddForm] = useState({
     employeeId: "",
     role: "service",
     startTime: "10:00",
     endTime: "18:00",
+    notes: "",
+  });
+  const [editForm, setEditForm] = useState({
+    startTime: "10:00",
+    endTime: "18:00",
+    role: "service",
     notes: "",
   });
 
@@ -219,6 +228,17 @@ export default function DaySchedulePage() {
     }));
   }
 
+  function openEditModal(shift: Shift) {
+    setEditingShift(shift);
+    setEditForm({
+      startTime: shift.startTime.slice(0, 5),
+      endTime: shift.endTime.slice(0, 5),
+      role: shift.role,
+      notes: shift.notes ?? "",
+    });
+    setIsEditOpen(true);
+  }
+
   async function handleAddShift() {
     if (!isSupabaseConfigured || !addForm.employeeId) return;
     setSaving(true);
@@ -237,6 +257,30 @@ export default function DaySchedulePage() {
       setDayShifts((prev) => [...prev, created]);
       toast.success("Shift added");
       setIsAddOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to save — try again");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEditShift() {
+    if (!isSupabaseConfigured || !editingShift) return;
+    setSaving(true);
+    try {
+      const updated = await updateShift(editingShift.id, {
+        startTime: editForm.startTime,
+        endTime: editForm.endTime,
+        role: editForm.role,
+        notes: editForm.notes || undefined,
+      });
+      setDayShifts((prev) =>
+        prev.map((shift) => (shift.id === updated.id ? updated : shift))
+      );
+      toast.success("Shift added");
+      setIsEditOpen(false);
+      setEditingShift(null);
     } catch (err) {
       console.error(err);
       toast.error("Failed to save — try again");
@@ -355,11 +399,13 @@ export default function DaySchedulePage() {
                           return (
                             <div
                               key={shift.id}
-                              className={`${roleBarClass(shift.role)} absolute top-2 h-[62px] rounded-md px-3 py-2`}
+                              className={`${roleBarClass(shift.role)} absolute top-2 h-[62px] cursor-pointer rounded-md px-3 py-2`}
                               style={{
                                 left: `${leftPct}%`,
                                 width: `${Math.max(widthPct, 9)}%`,
                               }}
+                              onClick={() => openEditModal(shift)}
+                              title={t("schedule.editShift")}
                             >
                               <div className="text-xs opacity-80">
                                 {shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)}
@@ -474,6 +520,103 @@ export default function DaySchedulePage() {
               size="sm"
               className="bg-[#e8b84b] text-black hover:bg-[#f0c75c]"
               onClick={handleAddShift}
+              disabled={saving}
+            >
+              {t("button.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isEditOpen}
+        onOpenChange={(open) => {
+          setIsEditOpen(open);
+          if (!open) setEditingShift(null);
+        }}
+      >
+        <DialogContent className="max-w-md border-[#2a2a2a] bg-[#141414]">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-[#f0f0f0]">
+              {t("schedule.editShift")}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#888]">
+              {format(selectedDate, "d MMM yyyy")}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-[#888]">{t("label.startTime")}</label>
+                <Input
+                  type="time"
+                  value={editForm.startTime}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, startTime: e.target.value }))
+                  }
+                  className="border-[#2a2a2a] bg-[#0f0f0f] text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#888]">{t("label.endTime")}</label>
+                <Input
+                  type="time"
+                  value={editForm.endTime}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, endTime: e.target.value }))
+                  }
+                  className="border-[#2a2a2a] bg-[#0f0f0f] text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-[#888]">{t("label.role")}</label>
+              <Select
+                value={editForm.role}
+                onValueChange={(value) => setEditForm((prev) => ({ ...prev, role: value }))}
+              >
+                <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                  <SelectItem value="service">{t("role.service")}</SelectItem>
+                  <SelectItem value="shiftleader">{t("role.shiftleader")}</SelectItem>
+                  <SelectItem value="rutin">{t("role.rutin")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-[#888]">{t("label.notes")}</label>
+              <Input
+                value={editForm.notes}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, notes: e.target.value }))
+                }
+                className="border-[#2a2a2a] bg-[#0f0f0f] text-sm"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-[#2a2a2a] text-[#f0f0f0]"
+              onClick={() => {
+                setIsEditOpen(false);
+                setEditingShift(null);
+              }}
+              disabled={saving}
+            >
+              {t("button.cancel")}
+            </Button>
+            <Button
+              size="sm"
+              className="bg-[#e8b84b] text-black hover:bg-[#f0c75c]"
+              onClick={handleEditShift}
               disabled={saving}
             >
               {t("button.save")}

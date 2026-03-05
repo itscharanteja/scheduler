@@ -10,12 +10,23 @@ type EmployeeInput = {
 };
 
 type ShiftInput = {
+  id?: string;
   employeeId: string;
   employeeName?: string;
   date: string;
   startTime: string;
   endTime: string;
   role: string;
+};
+
+type ShiftDeletion = {
+  shiftId: string;
+  employeeId?: string;
+  employeeName?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  reason?: string;
 };
 
 type RequestBody = {
@@ -54,12 +65,20 @@ Typical shift times: Morning 07:00-15:00, Lunch 10:00-18:00, Evening 14:00-22:00
 You will receive:
 - List of employees with their roles, max hours, and current scheduled hours
 - The manager's natural language request
-- Any existing shifts for the week
+- Any existing shifts for the week (with IDs)
+- If manager asks to remove/cancel someone's assigned shifts, return those shifts in deletions
 
 Respond ONLY with valid JSON in this exact format:
 {
   "explanation": "Brief explanation of scheduling decisions in the same language the manager used",
   "warnings": ["Any constraint violations or things to flag"],
+  "deletions": [
+    {
+      "shiftId": "existing-shift-id",
+      "employeeName": "Name",
+      "reason": "Why this shift is removed"
+    }
+  ],
   "shifts": [
     {
       "employeeId": "uuid",
@@ -155,6 +174,7 @@ export async function POST(req: Request) {
     const parsed = JSON.parse(extractJsonObject(text)) as {
       explanation?: unknown;
       warnings?: unknown;
+      deletions?: unknown;
       shifts?: unknown;
     };
 
@@ -195,9 +215,42 @@ export async function POST(req: Request) {
           .filter((s): s is NonNullable<typeof s> => Boolean(s))
       : [];
 
+    const deletions = Array.isArray(parsed.deletions)
+      ? parsed.deletions
+          .map((item) => {
+            if (!item || typeof item !== "object") return null;
+            const deletion = item as Record<string, unknown>;
+            const shiftId =
+              typeof deletion.shiftId === "string" ? deletion.shiftId : "";
+            if (!shiftId) return null;
+            return {
+              shiftId,
+              employeeId:
+                typeof deletion.employeeId === "string"
+                  ? deletion.employeeId
+                  : undefined,
+              employeeName:
+                typeof deletion.employeeName === "string"
+                  ? deletion.employeeName
+                  : undefined,
+              date: typeof deletion.date === "string" ? deletion.date : undefined,
+              startTime:
+                typeof deletion.startTime === "string"
+                  ? deletion.startTime
+                  : undefined,
+              endTime:
+                typeof deletion.endTime === "string" ? deletion.endTime : undefined,
+              reason:
+                typeof deletion.reason === "string" ? deletion.reason : undefined,
+            } as ShiftDeletion;
+          })
+          .filter((d): d is ShiftDeletion => Boolean(d))
+      : [];
+
     return NextResponse.json({
       explanation,
       warnings,
+      deletions,
       shifts,
     });
   } catch (error) {
