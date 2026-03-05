@@ -83,7 +83,7 @@ type Translations = Record<SupportedLanguage, Record<TranslationKey, string>>;
 
 const translations: Translations = {
   en: {
-    "app.title": "Scheduler",
+    "app.title": "Skift",
     "nav.dashboard": "Dashboard",
     "nav.employees": "Employees",
     "nav.schedule": "Schedule",
@@ -154,7 +154,7 @@ const translations: Translations = {
     "label.notes": "Notes",
   },
   sv: {
-    "app.title": "Schemaläggare",
+    "app.title": "Skift",
     "nav.dashboard": "Översikt",
     "nav.employees": "Anställda",
     "nav.schedule": "Schema",

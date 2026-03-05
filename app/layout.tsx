@@ -16,8 +16,8 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Scheduler",
-  description: "Scheduling app for employees and shifts",
+  title: "Skift",
+  description: "Skift – premium scheduling for teams",
 };
 
 export default function RootLayout({
@@ -26,18 +26,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body
-        className={`${dmSans.variable} ${dmMono.variable} antialiased bg-[#0a0a0a] text-[#f0f0f0] transition-colors duration-300`}
+        className={`${dmSans.variable} ${dmMono.variable} antialiased bg-background text-foreground transition-colors duration-300`}
       >
         <LanguageAppShell>{children}</LanguageAppShell>
         <Toaster
           position="top-right"
           toastOptions={{
             style: {
-              background: "#141414",
-              border: "1px solid #2a2a2a",
-              color: "#f0f0f0",
+              background: "rgba(255,255,255,0.65)",
+              border: "1px solid rgba(255,255,255,0.45)",
+              color: "#0a0a0a",
+              backdropFilter: "blur(16px)",
             },
           }}
         />

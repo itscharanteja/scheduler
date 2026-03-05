@@ -1,6 +1,6 @@
-# Scheduler
+# Skift
 
-Scheduler is a staff scheduling app for Mister York (Gothenburg, Sweden).  
+Skift is a staff scheduling app.  
 It helps managers run weekly shift planning, manage employee contracts, and generate draft schedules using AI.
 
 ## Tech Stack
@@ -70,7 +70,7 @@ This creates:
 - `employees`
 - `shifts`
 
-and seeds Mister York Gothenburg + sample employees.
+and seeds sample locations and employees.
 
 ### 4. Start development server
 

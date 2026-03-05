@@ -42,3 +42,40 @@ export interface Location {
   address: string;
 }
 
+export type SettingsPayload = {
+  userPreferences: {
+    compactMode: boolean;
+    weekStartsOnMonday: boolean;
+  };
+  notificationPreferences: {
+    shiftAssigned: boolean;
+    shiftUpdated: boolean;
+    shiftConflict: boolean;
+    aiSuggestion: boolean;
+  };
+  workingHours: {
+    start: string;
+    end: string;
+  };
+  timezone: string;
+  aiPreferences: {
+    optimizeForFairness: boolean;
+    avoidOvertime: boolean;
+    assistantTone: "concise" | "balanced" | "detailed";
+  };
+};
+
+export type NotificationKind =
+  | "shift_assigned"
+  | "shift_updated"
+  | "shift_conflict"
+  | "ai_suggestion";
+
+export interface AppNotification {
+  id: string;
+  type: NotificationKind;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+}

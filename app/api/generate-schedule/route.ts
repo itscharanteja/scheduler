@@ -39,7 +39,7 @@ function detectPromptLanguage(prompt: string): "sv" | "en" {
 }
 
 const SYSTEM_PROMPT = `
-You are a restaurant scheduling assistant for Mister York, a burger restaurant in Gothenburg, Sweden.
+You are a scheduling assistant for Skift.
 
 You help managers create weekly staff schedules. You must:
 1. Respect each employee's max weekly hours from their contract

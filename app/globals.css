@@ -124,3 +124,359 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Apple-like glass system (Bottom → Top)
+  1) environment background
+  2) ambient light gradients
+  3) blur diffusion layer
+  4) translucent glass surface
+  5) edge border highlight
+  6) reflection overlay
+  7) shadow elevation
+  8) UI content + motion
+*/
+
+.glass-scene {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f5f5f7 0%, #ececf1 100%);
+}
+
+.glass-card {
+  position: relative;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  transition: all 240ms cubic-bezier(.4, 0, .2, 1);
+}
+
+/* edge border highlight */
+.glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* reflection overlay */
+.glass-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(255, 255, 255, 0.35) 40%,
+    rgba(255, 255, 255, 0.15) 100%
+  );
+  opacity: 0.7;
+  mix-blend-mode: screen;
+}
+
+.glass-interactive {
+  transition: all 240ms cubic-bezier(.4, 0, .2, 1);
+}
+
+.glass-interactive:hover {
+  transform: translateY(-2px) scale(1.015);
+  filter: brightness(1.03);
+}
+
+.glass-interactive:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.glass-muted {
+  background: rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.glass-chip {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.50);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.glass-nav-button {
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.64);
+  backdrop-filter: blur(16px) saturate(165%);
+  -webkit-backdrop-filter: blur(16px) saturate(165%);
+  box-shadow:
+    0 12px 22px rgba(15, 23, 42, 0.10),
+    0 -1px 0 rgba(255, 255, 255, 0.68) inset,
+    0 1px 0 rgba(148, 163, 184, 0.15) inset;
+  transition: all 180ms cubic-bezier(.4, 0, .2, 1);
+}
+
+.glass-nav-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.70) 0%,
+    rgba(255, 255, 255, 0.18) 55%,
+    rgba(148, 163, 184, 0.06) 100%
+  );
+}
+
+.glass-nav-button::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 2px;
+  height: 35%;
+  border-radius: 999px;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 100% at 50% 0%,
+    rgba(255, 255, 255, 0.65),
+    transparent 70%
+  );
+  opacity: 0.8;
+}
+
+.glass-nav-button:hover {
+  filter: brightness(1.03);
+  box-shadow:
+    0 14px 26px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.38) inset,
+    0 -1px 0 rgba(255, 255, 255, 0.76) inset;
+}
+
+.glass-nav-button:active {
+  transform: translateY(1px) scale(0.985);
+  filter: brightness(0.99);
+}
+
+.glass-button {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.60);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.10);
+}
+
+/* Header / navigation bar */
+
+.glass-header {
+  height: 64px;
+  padding-inline: 20px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+
+/* Schedule – elevated month container */
+
+.glass-month-card {
+  position: relative;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  box-shadow:
+    0 20px 54px rgba(15, 23, 42, 0.10),
+    0 4px 16px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.glass-month-card::before {
+  /* internal light + edge highlight */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.08) 40%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.glass-month-card::after {
+  /* micro inner glow */
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+}
+
+/* Shift time blocks */
+
+.glass-shift {
+  position: relative;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  transition: all 240ms cubic-bezier(.4, 0, .2, 1);
+}
+
+.glass-shift:hover {
+  transform: translateY(-1px) scale(1.02);
+  filter: brightness(1.04);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.glass-shift:active {
+  transform: scale(0.98);
+}
+
+/* Employee cards – layered liquid glass */
+
+.glass-employee-card {
+  position: relative;
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.30);
+  overflow: hidden;
+}
+
+.glass-employee-card::before {
+  /* inner reflection gradient + edge highlight */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.28) 0%,
+      rgba(255, 255, 255, 0.05) 35%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.glass-employee-card::after {
+  /* top-edge shimmer */
+  content: "";
+  position: absolute;
+  inset-inline: 8px;
+  top: 0;
+  height: 32px;
+  border-radius: 999px;
+  background: radial-gradient(
+    120% 140% at 50% 0%,
+    rgba(255, 255, 255, 0.50),
+    transparent 60%
+  );
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Shift popup modal */
+
+.glass-shift-modal {
+  position: relative;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  box-shadow: 0 34px 80px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.glass-shift-modal::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.glass-popup-button {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  padding-inline: 18px;
+  padding-block: 10px;
+  font-size: 13px;
+  transition: all 240ms cubic-bezier(.4, 0, .2, 1);
+}
+
+.glass-popup-button:hover {
+  transform: translateY(-1px) scale(1.02);
+  filter: brightness(1.04);
+}
+
+.glass-popup-button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* AI Agent panels */
+
+.glass-ai-panel {
+  position: relative;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.glass-ai-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.03) 60%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
