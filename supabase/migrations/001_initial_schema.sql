@@ -59,14 +59,12 @@ values (
   'Gothenburg, Sweden'
 );
 
--- Seed 6 sample employees with different roles and employment types
+-- Seed sample employees
 insert into public.employees
   (name, role, contract_hours, max_weekly_hours, employment_type, phone, location_id, hourly_rate)
 values
-  ('Anna Andersson', 'service', 40, 40, 'full-time', '+46 70 111 11 11', '11111111-1111-4111-8111-111111111111', 145.00),
-  ('Björn Berg', 'shiftleader', 30, 32, 'part-time', '+46 70 222 22 22', '11111111-1111-4111-8111-111111111111', 165.00),
-  ('Carla Lind', 'rutin', 40, 45, 'full-time', '+46 70 333 33 33', '11111111-1111-4111-8111-111111111111', 190.00),
-  ('David Nilsson', 'service', 20, 25, 'part-time', '+46 70 444 44 44', '11111111-1111-4111-8111-111111111111', 130.00),
-  ('Elin Svensson', 'rutin', 15, 20, 'part-time', '+46 70 555 55 55', '11111111-1111-4111-8111-111111111111', 150.00),
-  ('Fred Holm', 'service', 0, 30, 'hourly', '+46 70 666 66 66', '11111111-1111-4111-8111-111111111111', 140.00);
-
+  ('Charan Sri Teja Burra', 'service', 20, 20, 'part-time', '+46 70 111 11 11', '11111111-1111-4111-8111-111111111111', 145.00),
+  ('Deependra Sai Kumar Reddy', 'shiftleader', 40, 40, 'full-time', '+46 70 222 22 22', '11111111-1111-4111-8111-111111111111', 160.00),
+  ('Vinod Vetukuri', 'service', 20, 20, 'part-time', '+46 70 333 33 33', '11111111-1111-4111-8111-111111111111', 145.00),
+  ('Beryvan', 'shiftleader', 40, 40, 'full-time', '+46 70 444 44 44', '11111111-1111-4111-8111-111111111111', 185.00),
+  ('Omid', 'shiftleader', 40, 40, 'full-time', '+46 70 555 55 55', '11111111-1111-4111-8111-111111111111', 180.00);

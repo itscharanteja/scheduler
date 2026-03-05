@@ -49,7 +49,13 @@ import { ChevronLeft, ChevronRight, Plus, X, Loader2, Sparkles } from "lucide-re
 import { toast } from "sonner";
 
 const LOCATION_ID = "11111111-1111-4111-8111-111111111111";
-const TIME_PRESETS = ["07:00", "10:00", "12:00", "16:00", "18:00"];
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) =>
+  (i + 1).toString().padStart(2, "0")
+);
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) =>
+  i.toString().padStart(2, "0")
+);
+const PERIOD_OPTIONS = ["AM", "PM"] as const;
 
 const DAY_KEYS = [
   "schedule.day.mon",
@@ -81,6 +87,40 @@ function shiftHours(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(":").map(Number);
   const [eh, em] = endTime.split(":").map(Number);
   return (eh * 60 + em - sh * 60 - sm) / 60;
+}
+
+type Period = (typeof PERIOD_OPTIONS)[number];
+
+function to12hParts(time24: string): { hour: string; minute: string; period: Period } {
+  const [h, m] = time24.split(":").map(Number);
+  if (
+    Number.isNaN(h) ||
+    Number.isNaN(m) ||
+    h < 0 ||
+    h > 23 ||
+    m < 0 ||
+    m > 59
+  ) {
+    return { hour: "10", minute: "00", period: "AM" };
+  }
+  const period: Period = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return {
+    hour: hour12.toString().padStart(2, "0"),
+    minute: m.toString().padStart(2, "0"),
+    period,
+  };
+}
+
+function from12hParts(hour: string, minute: string, period: Period): string {
+  const h = Number.parseInt(hour, 10);
+  const m = Number.parseInt(minute, 10);
+  if (Number.isNaN(h) || Number.isNaN(m) || h < 1 || h > 12 || m < 0 || m > 59) {
+    return "10:00";
+  }
+  let hour24 = h % 12;
+  if (period === "PM") hour24 += 12;
+  return `${hour24.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
 function roleChipClass(role: string): string {
@@ -262,6 +302,30 @@ export default function ScheduleDashboardPage() {
       { value: "rutin", label: t("role.rutin") },
     ],
     [t]
+  );
+
+  const startParts = useMemo(() => to12hParts(form.startTime), [form.startTime]);
+  const endParts = useMemo(() => to12hParts(form.endTime), [form.endTime]);
+
+  const updateTimeField = useCallback(
+    (
+      field: "startTime" | "endTime",
+      patch: Partial<{ hour: string; minute: string; period: Period }>
+    ) => {
+      setForm((prev) => {
+        const current = to12hParts(prev[field]);
+        const next = {
+          hour: patch.hour ?? current.hour,
+          minute: patch.minute ?? current.minute,
+          period: patch.period ?? current.period,
+        };
+        return {
+          ...prev,
+          [field]: from12hParts(next.hour, next.minute, next.period),
+        };
+      });
+    },
+    []
   );
 
   function openAdd(day: string) {
@@ -678,43 +742,107 @@ export default function ScheduleDashboardPage() {
                 <label className="mb-1 block text-xs text-[#888]">
                   {t("label.startTime")}
                 </label>
-                <Select
-                  value={form.startTime}
-                  onValueChange={(v) => setForm((f) => ({ ...f, startTime: v }))}
-                >
-                  <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border-[#2a2a2a] bg-[#141414]">
-                    {TIME_PRESETS.map((preset) => (
-                      <SelectItem key={preset} value={preset}>
-                        {preset}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                  <Select
+                    value={startParts.hour}
+                    onValueChange={(v) => updateTimeField("startTime", { hour: v })}
+                  >
+                    <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {HOUR_OPTIONS.map((hour) => (
+                        <SelectItem key={hour} value={hour}>
+                          {hour}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={startParts.minute}
+                    onValueChange={(v) => updateTimeField("startTime", { minute: v })}
+                  >
+                    <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {MINUTE_OPTIONS.map((minute) => (
+                        <SelectItem key={minute} value={minute}>
+                          {minute}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={startParts.period}
+                    onValueChange={(v) =>
+                      updateTimeField("startTime", { period: v as Period })
+                    }
+                  >
+                    <SelectTrigger className="w-[76px] border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {PERIOD_OPTIONS.map((period) => (
+                        <SelectItem key={period} value={period}>
+                          {period}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[#888]">
                   {t("label.endTime")}
                 </label>
-                <Select
-                  value={form.endTime}
-                  onValueChange={(v) => setForm((f) => ({ ...f, endTime: v }))}
-                >
-                  <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border-[#2a2a2a] bg-[#141414]">
-                    {TIME_PRESETS.map((preset) => (
-                      <SelectItem key={preset} value={preset}>
-                        {preset}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="21:00">21:00</SelectItem>
-                    <SelectItem value="22:00">22:00</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                  <Select
+                    value={endParts.hour}
+                    onValueChange={(v) => updateTimeField("endTime", { hour: v })}
+                  >
+                    <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {HOUR_OPTIONS.map((hour) => (
+                        <SelectItem key={hour} value={hour}>
+                          {hour}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={endParts.minute}
+                    onValueChange={(v) => updateTimeField("endTime", { minute: v })}
+                  >
+                    <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {MINUTE_OPTIONS.map((minute) => (
+                        <SelectItem key={minute} value={minute}>
+                          {minute}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={endParts.period}
+                    onValueChange={(v) => updateTimeField("endTime", { period: v as Period })}
+                  >
+                    <SelectTrigger className="w-[76px] border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {PERIOD_OPTIONS.map((period) => (
+                        <SelectItem key={period} value={period}>
+                          {period}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
             <div>
@@ -810,43 +938,107 @@ export default function ScheduleDashboardPage() {
                 <label className="mb-1 block text-xs text-[#888]">
                   {t("label.startTime")}
                 </label>
-                <Select
-                  value={form.startTime}
-                  onValueChange={(v) => setForm((f) => ({ ...f, startTime: v }))}
-                >
-                  <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border-[#2a2a2a] bg-[#141414]">
-                    {TIME_PRESETS.map((tm) => (
-                      <SelectItem key={tm} value={tm}>
-                        {tm}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                  <Select
+                    value={startParts.hour}
+                    onValueChange={(v) => updateTimeField("startTime", { hour: v })}
+                  >
+                    <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {HOUR_OPTIONS.map((hour) => (
+                        <SelectItem key={hour} value={hour}>
+                          {hour}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={startParts.minute}
+                    onValueChange={(v) => updateTimeField("startTime", { minute: v })}
+                  >
+                    <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {MINUTE_OPTIONS.map((minute) => (
+                        <SelectItem key={minute} value={minute}>
+                          {minute}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={startParts.period}
+                    onValueChange={(v) =>
+                      updateTimeField("startTime", { period: v as Period })
+                    }
+                  >
+                    <SelectTrigger className="w-[76px] border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {PERIOD_OPTIONS.map((period) => (
+                        <SelectItem key={period} value={period}>
+                          {period}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[#888]">
                   {t("label.endTime")}
                 </label>
-                <Select
-                  value={form.endTime}
-                  onValueChange={(v) => setForm((f) => ({ ...f, endTime: v }))}
-                >
-                  <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border-[#2a2a2a] bg-[#141414]">
-                    {TIME_PRESETS.map((tm) => (
-                      <SelectItem key={tm} value={tm}>
-                        {tm}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="21:00">21:00</SelectItem>
-                    <SelectItem value="22:00">22:00</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                  <Select
+                    value={endParts.hour}
+                    onValueChange={(v) => updateTimeField("endTime", { hour: v })}
+                  >
+                    <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {HOUR_OPTIONS.map((hour) => (
+                        <SelectItem key={hour} value={hour}>
+                          {hour}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={endParts.minute}
+                    onValueChange={(v) => updateTimeField("endTime", { minute: v })}
+                  >
+                    <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {MINUTE_OPTIONS.map((minute) => (
+                        <SelectItem key={minute} value={minute}>
+                          {minute}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={endParts.period}
+                    onValueChange={(v) => updateTimeField("endTime", { period: v as Period })}
+                  >
+                    <SelectTrigger className="w-[76px] border-[#2a2a2a] bg-[#0f0f0f] text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#2a2a2a] bg-[#141414]">
+                      {PERIOD_OPTIONS.map((period) => (
+                        <SelectItem key={period} value={period}>
+                          {period}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
             <div>
