@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   addDays,
@@ -11,7 +11,6 @@ import {
   startOfWeek,
 } from "date-fns";
 import { Loader2, Sparkles, TriangleAlert } from "lucide-react";
-import { useLanguage } from "@/context/LanguageContext";
 import { Button } from "@/components/ui/button";
 import {
   getEmployees,
@@ -79,10 +78,6 @@ const COPY = {
     withinLimit: "Within max",
     noShifts: "No shifts generated yet.",
     loading: "Loading employees and shifts...",
-    loadError: "Failed to load employees/shifts for AI generation.",
-    genError: "Failed to generate schedule.",
-    applyError: "Failed to apply generated shifts.",
-    applySuccess: "AI draft applied to schedule as draft shifts.",
     notConfigured:
       "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.",
     anthropicMissing:
@@ -125,10 +120,6 @@ const COPY = {
     withinLimit: "Inom max",
     noShifts: "Inga pass har genererats än.",
     loading: "Laddar anställda och pass...",
-    loadError: "Kunde inte ladda anställda/pass för AI-generering.",
-    genError: "Kunde inte generera schema.",
-    applyError: "Kunde inte spara AI-pass.",
-    applySuccess: "AI-utkast sparades i schemat som utkastpass.",
     notConfigured:
       "Supabase är inte konfigurerad. Lägg till NEXT_PUBLIC_SUPABASE_URL och NEXT_PUBLIC_SUPABASE_ANON_KEY i .env.local.",
     anthropicMissing:
@@ -164,24 +155,8 @@ function parseWeekParam(weekParam: string | null): Date {
   return startOfWeek(weekAdjusted, { weekStartsOn: 1 });
 }
 
-function shiftHours(startTime: string, endTime: string): number {
-  const [sh, sm] = startTime.split(":").map(Number);
-  const [eh, em] = endTime.split(":").map(Number);
-  return (eh * 60 + em - sh * 60 - sm) / 60;
-}
-
 function roleChipClass(role: string): string {
   switch (role) {
-    case "grill":
-      return "bg-[#e8b84b]/20 text-[#e8b84b] border-[#e8b84b]/50";
-    case "counter":
-      return "bg-sky-500/20 text-sky-300 border-sky-500/50";
-    case "manager":
-      return "bg-purple-500/20 text-purple-300 border-purple-500/50";
-    case "cashier":
-      return "bg-emerald-500/20 text-emerald-300 border-emerald-500/50";
-    case "cleaner":
-      return "bg-slate-500/20 text-slate-300 border-slate-500/50";
     case "service":
       return "bg-sky-500/20 text-sky-300 border-sky-500/50";
     case "shiftleader":
@@ -200,7 +175,6 @@ export default function DashboardAiAgentPage() {
     () => parseWeekParam(searchParams.get("week")),
     [searchParams],
   );
-
   const text = COPY[lang];
   const [prompt, setPrompt] = useState("");
   const [provider, setProvider] = useState<"claude" | "openai">("claude");
@@ -219,34 +193,20 @@ export default function DashboardAiAgentPage() {
   const [usageMetrics, setUsageMetrics] = useState<UsageMetrics | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      if (!isSupabaseConfigured) {
-        setLoadingData(false);
-        return;
-      }
-      try {
-        setLoadingData(true);
-        const [employeeRows, schedule] = await Promise.all([
-          getEmployees(),
-          getShiftsByWeek(weekStart, LOCATION_ID),
-        ]);
-        if (!active) return;
-        setEmployees(employeeRows);
-        setExistingShifts(schedule.shifts);
-      } catch (loadErr) {
-        console.error(loadErr);
-        if (!active) return;
-        setError(text.loadError);
-      } finally {
-        if (active) setLoadingData(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [weekStart, text.loadError]);
+  const {
+    prompt,
+    setPrompt,
+    result,
+    loadingData,
+    generating,
+    applying,
+    error,
+    success,
+    hourImpact,
+    generate,
+    applyGenerated,
+    isSupabaseConfigured,
+  } = useAIAgent({ weekStart });
 
   const dayDates = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
@@ -256,9 +216,8 @@ export default function DashboardAiAgentPage() {
     () => dayDates.map((d) => format(d, "yyyy-MM-dd")),
     [dayDates],
   );
-
   const groupedGenerated = useMemo(() => {
-    const map: Record<string, GeneratedShift[]> = {};
+    const map: Record<string, NonNullable<typeof result>["shifts"]> = {};
     for (const day of dayOrder) map[day] = [];
     for (const shift of result?.shifts ?? []) {
       if (!map[shift.date]) map[shift.date] = [];
@@ -553,17 +512,17 @@ export default function DashboardAiAgentPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-[#2a2a2a] bg-[#101010] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+      <section className="glass-ai-panel glass-interactive p-5">
         <div className="mb-4">
-          <h2 className="font-mono text-lg text-[#f0f0f0]">{text.title}</h2>
-          <p className="mt-1 text-sm text-[#8f8f8f]">{text.subtitle}</p>
-          <p className="mt-2 text-xs font-mono tracking-wide text-[#6f6f6f]">
+          <h2 className="font-mono text-lg text-slate-900">{text.title}</h2>
+          <p className="mt-1 text-sm text-slate-600">{text.subtitle}</p>
+          <p className="mt-2 text-xs font-mono tracking-wide text-slate-500">
             {weekLabel}
           </p>
         </div>
 
         {!isSupabaseConfigured && (
-          <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">
+          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             {text.notConfigured}
           </div>
         )}
@@ -602,7 +561,7 @@ export default function DashboardAiAgentPage() {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder={text.placeholder}
-          className="h-36 w-full resize-y rounded-md border border-[#2a2a2a] bg-[#0a0a0a] p-3 text-sm text-[#f0f0f0] outline-none ring-0 placeholder:text-[#666] focus:border-[#e8b84b]/60"
+          className="h-36 w-full resize-y rounded-2xl border border-white/60 bg-white/70 p-3 text-sm text-slate-900 outline-none ring-0 placeholder:text-slate-400 focus:border-slate-400"
         />
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -611,7 +570,7 @@ export default function DashboardAiAgentPage() {
               key={example}
               type="button"
               onClick={() => setPrompt(example)}
-              className="rounded-full border border-[#2a2a2a] bg-[#151515] px-3 py-1.5 text-xs text-[#cfcfcf] hover:border-[#e8b84b]/50 hover:text-[#f0f0f0]"
+              className="glass-chip px-3 py-1.5 text-xs text-slate-800 hover:brightness-105"
             >
               {example}
             </button>
@@ -672,22 +631,22 @@ export default function DashboardAiAgentPage() {
         </div>
       )}
       {success && (
-        <div className="rounded-md border border-emerald-700/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           {success}
         </div>
       )}
 
-      <section className="rounded-xl border border-[#2a2a2a] bg-[#101010] p-5">
+      <section className="glass-ai-panel glass-interactive mt-8 space-y-4 p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="font-mono text-sm uppercase tracking-wide text-[#9f9f9f]">
+          <h3 className="font-mono text-sm uppercase tracking-wide text-slate-600">
             {text.generated}
           </h3>
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="border-[#2a2a2a] text-[#f0f0f0]"
-              onClick={handleGenerate}
+              className="glass-button border-none bg-white/70 text-slate-900"
+              onClick={() => generate()}
               disabled={generating || !prompt.trim()}
             >
               {text.regenerate}
@@ -776,13 +735,13 @@ export default function DashboardAiAgentPage() {
 
         {!!result?.warnings?.length && (
           <div className="mb-4 space-y-2">
-            <div className="text-xs uppercase tracking-wide text-[#888]">
+            <div className="text-xs uppercase tracking-wide text-slate-600">
               {text.warnings}
             </div>
             {result.warnings.map((warning) => (
               <div
                 key={warning}
-                className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-950/25 px-3 py-2 text-sm text-amber-200"
+                className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
               >
                 <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{warning}</span>
@@ -823,12 +782,12 @@ export default function DashboardAiAgentPage() {
               return (
                 <div
                   key={day}
-                  className="flex min-h-[52px] items-center gap-3 rounded-lg border border-[#2a2a2a] bg-[#141414] px-3 py-2"
+                  className="flex min-h-[52px] items-center gap-3 rounded-lg border border-white/60 bg-white/80 px-3 py-2"
                 >
                   <div className="w-24 shrink-0 font-mono text-xs text-[#888]">
                     {text.dayNames[index]}
                   </div>
-                  <div className="w-24 shrink-0 font-mono text-sm text-[#f0f0f0]">
+                  <div className="w-24 shrink-0 font-mono text-sm text-[#4b5563]">
                     {format(dayDates[index], "d MMM")}
                   </div>
                   <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
@@ -855,13 +814,13 @@ export default function DashboardAiAgentPage() {
             })}
           </div>
         ) : (
-          <div className="rounded-md border border-dashed border-[#2a2a2a] bg-[#121212] px-4 py-8 text-center text-sm text-[#777]">
+          <div className="rounded-md border border-dashed border-slate-200 bg-white/70 px-4 py-8 text-center text-sm text-slate-600">
             {text.noShifts}
           </div>
         )}
 
-        <div className="mt-5 rounded-lg border border-[#2a2a2a] bg-[#131313] p-3">
-          <div className="mb-3 text-xs uppercase tracking-wide text-[#888]">
+        <div className="mt-5 rounded-lg border border-white/70 bg-white/80 p-3">
+          <div className="mb-3 text-xs uppercase tracking-wide text-slate-600">
             {text.hours}
           </div>
           <div className="space-y-2">
@@ -870,16 +829,16 @@ export default function DashboardAiAgentPage() {
                 key={row.id}
                 className="flex items-center justify-between gap-3 text-sm"
               >
-                <span className="truncate text-[#d7d7d7]">{row.name}</span>
+                <span className="truncate text-slate-800">{row.name}</span>
                 <span
-                  className={`font-mono ${row.exceeds ? "text-red-400" : "text-emerald-400"}`}
+                  className={`font-mono ${row.exceeds ? "text-red-500" : "text-emerald-600"}`}
                 >
                   {row.projected.toFixed(1)}h / {row.max}h
                 </span>
               </div>
             ))}
           </div>
-          <div className="mt-3 flex items-center justify-between text-xs text-[#8a8a8a]">
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
             <span>{text.withinLimit}</span>
             <span>{text.overLimit}</span>
           </div>

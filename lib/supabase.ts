@@ -1,6 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Employee, Shift, WeekSchedule } from "./types";
-import { addDays, startOfWeek } from "date-fns";
+import {
+  addDays,
+  endOfMonth,
+  startOfMonth,
+  startOfWeek,
+} from "date-fns";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
@@ -175,6 +180,44 @@ export async function getShiftsByWeek(
     };
   } catch (error) {
     throw normalizeSupabaseError(error, "getShiftsByWeek");
+  }
+}
+
+export async function getShiftsByMonth(
+  monthDate: string | Date,
+  locationId?: string
+): Promise<Shift[]> {
+  try {
+    const base =
+      typeof monthDate === "string" ? new Date(monthDate) : monthDate;
+    const start = startOfMonth(base);
+    const end = endOfMonth(base);
+
+    if (!supabaseClient) return [];
+
+    let query = supabaseClient
+      .from("shifts")
+      .select(
+        "id, employee_id, date, start_time, end_time, role, location_id, status, created_by_ai, notes, created_at, employees(name)"
+      )
+      .gte("date", start.toISOString().slice(0, 10))
+      .lte("date", end.toISOString().slice(0, 10));
+
+    if (locationId) {
+      query = query.eq("location_id", locationId);
+    }
+
+    const { data, error } = await query.order("date", { ascending: true });
+    if (error) throw error;
+
+    return (data as any[]).map((row) =>
+      mapShift({
+        ...(row as any),
+        employee_name: row.employees?.name ?? null,
+      })
+    );
+  } catch (error) {
+    throw normalizeSupabaseError(error, "getShiftsByMonth");
   }
 }
 

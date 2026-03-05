@@ -261,7 +261,7 @@ export default function EmployeesDashboardPage() {
   return (
     <div className="space-y-6">
       {!isSupabaseConfigured && (
-        <div className="rounded-lg border border-amber-500/50 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
+        <div className="glass-card px-4 py-3 text-sm text-amber-800 bg-amber-50/80 border border-amber-200">
           {t("employees.supabaseNotConfigured")}
         </div>
       )}
@@ -269,42 +269,42 @@ export default function EmployeesDashboardPage() {
       {/* Summary stats */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap gap-4">
-          <Card className="border-[#2a2a2a] bg-[#141414]">
+          <Card className="glass-card border-none bg-transparent">
             <CardContent className="py-3 px-4">
-              <div className="text-xs text-[#888888]">
+              <div className="text-xs text-slate-600">
                 {t("employees.summary.total")}
               </div>
-              <div className="mt-1 text-lg font-mono text-[#f0f0f0]">
+              <div className="mt-1 text-lg font-mono text-slate-900">
                 {stats.total}
               </div>
             </CardContent>
           </Card>
-          <Card className="border-[#2a2a2a] bg-[#141414]">
+          <Card className="glass-card border-none bg-transparent">
             <CardContent className="py-3 px-4">
-              <div className="text-xs text-[#888888]">
+              <div className="text-xs text-slate-600">
                 {t("employees.summary.fullTime")}
               </div>
-              <div className="mt-1 text-lg font-mono text-[#f0f0f0]">
+              <div className="mt-1 text-lg font-mono text-slate-900">
                 {stats.fullTime}
               </div>
             </CardContent>
           </Card>
-          <Card className="border-[#2a2a2a] bg-[#141414]">
+          <Card className="glass-card border-none bg-transparent">
             <CardContent className="py-3 px-4">
-              <div className="text-xs text-[#888888]">
+              <div className="text-xs text-slate-600">
                 {t("employees.summary.partTime")}
               </div>
-              <div className="mt-1 text-lg font-mono text-[#f0f0f0]">
+              <div className="mt-1 text-lg font-mono text-slate-900">
                 {stats.partTime}
               </div>
             </CardContent>
           </Card>
-          <Card className="border-[#2a2a2a] bg-[#141414]">
+          <Card className="glass-card border-none bg-transparent">
             <CardContent className="py-3 px-4">
-              <div className="text-xs text-[#888888]">
+              <div className="text-xs text-slate-600">
                 {t("employees.summary.totalHours")}
               </div>
-              <div className="mt-1 text-lg font-mono text-[#f0f0f0]">
+              <div className="mt-1 text-lg font-mono text-slate-900">
                 {stats.totalHours}h
               </div>
             </CardContent>
@@ -323,7 +323,7 @@ export default function EmployeesDashboardPage() {
 
       {/* Error */}
       {error && (
-        <div className="rounded-md border border-red-800 bg-red-950 px-3 py-2 text-xs text-red-200">
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
         </div>
       )}
@@ -334,26 +334,26 @@ export default function EmployeesDashboardPage() {
           {Array.from({ length: 6 }).map((_, i) => (
             <Card
               key={i}
-              className="border-[#2a2a2a] bg-[#141414] animate-pulse"
+              className="glass-card border-none bg-transparent animate-pulse"
             >
               <CardHeader className="space-y-2">
-                <div className="h-4 w-32 rounded bg-[#1f1f1f]" />
-                <div className="h-3 w-20 rounded bg-[#1f1f1f]" />
+                <div className="h-4 w-32 rounded bg-slate-200/70" />
+                <div className="h-3 w-20 rounded bg-slate-200/70" />
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="h-3 w-28 rounded bg-[#1f1f1f]" />
-                <div className="h-3 w-24 rounded bg-[#1f1f1f]" />
-                <div className="h-3 w-40 rounded bg-[#1f1f1f]" />
+                <div className="h-3 w-28 rounded bg-slate-200/70" />
+                <div className="h-3 w-24 rounded bg-slate-200/70" />
+                <div className="h-3 w-40 rounded bg-slate-200/70" />
               </CardContent>
             </Card>
           ))}
         </div>
       ) : !hasEmployees ? (
-        <div className="rounded-md border border-dashed border-[#2a2a2a] bg-[#111111] px-6 py-10 text-center text-sm text-[#888888]">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-[#2a2a2a] bg-[#141414] text-2xl">
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 px-6 py-10 text-center text-sm text-slate-600">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-white/70 bg-white/80 text-2xl shadow-sm">
             👥
           </div>
-          <p className="text-sm text-[#bbbbbb]">
+          <p className="text-sm text-slate-700">
             No employees yet — add your first team member
           </p>
         </div>
@@ -370,12 +370,12 @@ export default function EmployeesDashboardPage() {
             return (
               <Card
                 key={emp.id}
-                className="border-[#2a2a2a] bg-[#141414] flex flex-col justify-between"
+                className="glass-employee-card glass-interactive border-none bg-transparent flex flex-col justify-between"
               >
                 <CardHeader className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <CardTitle className="font-mono text-base text-[#f0f0f0]">
+                      <CardTitle className="font-mono text-base text-slate-900">
                         {emp.name}
                       </CardTitle>
                       <div className="mt-1 flex flex-wrap gap-2">
@@ -413,7 +413,7 @@ export default function EmployeesDashboardPage() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-2 text-xs text-[#bbbbbb]">
+                <CardContent className="space-y-2 text-xs text-slate-700">
                   <div>
                     {t("label.contractHours")}:{" "}
                     <span className="font-mono">
@@ -444,14 +444,14 @@ export default function EmployeesDashboardPage() {
 
       {/* Add/Edit Employee Dialog */}
       <Dialog open={isFormOpen} onOpenChange={(open) => !open && closeForm()}>
-        <DialogContent className="bg-[#141414] border-[#2a2a2a]">
+        <DialogContent className="glass-card border-none bg-white/80">
           <DialogHeader>
-            <DialogTitle className="font-mono text-[#f0f0f0]">
+            <DialogTitle className="font-mono text-slate-900">
               {editingEmployee
                 ? t("employees.editEmployee")
                 : t("employees.addEmployee")}
             </DialogTitle>
-            <DialogDescription className="text-xs text-[#888888]">
+            <DialogDescription className="text-xs text-slate-600">
               {editingEmployee
                 ? t("employees.editEmployee")
                 : t("employees.addEmployee")}
@@ -460,7 +460,7 @@ export default function EmployeesDashboardPage() {
 
           <div className="space-y-4 py-2">
             <div className="space-y-1">
-              <label className="text-xs text-[#888888]">
+              <label className="text-xs text-slate-600">
                 {t("label.name")}
               </label>
               <Input
@@ -468,13 +468,13 @@ export default function EmployeesDashboardPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, name: e.target.value }))
                 }
-                className="bg-[#0f0f0f] border-[#2a2a2a] text-sm"
+                className="border border-white/60 bg-white/70 text-sm"
               />
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs text-[#888888]">
+                <label className="text-xs text-slate-600">
                   {t("label.role")}
                 </label>
                 <Select
@@ -483,10 +483,10 @@ export default function EmployeesDashboardPage() {
                     setForm((f) => ({ ...f, role: value }))
                   }
                 >
-                  <SelectTrigger className="bg-[#0f0f0f] border-[#2a2a2a] text-xs">
+                  <SelectTrigger className="border border-white/60 bg-white/70 text-xs">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#141414] border-[#2a2a2a]">
+                  <SelectContent className="border border-white/60 bg-white/80">
                     {roleOptions.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {opt.label}
@@ -497,7 +497,7 @@ export default function EmployeesDashboardPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-[#888888]">
+                <label className="text-xs text-slate-600">
                   {t("label.employmentType")}
                 </label>
                 <Select
@@ -506,10 +506,10 @@ export default function EmployeesDashboardPage() {
                     setForm((f) => ({ ...f, employmentType: value }))
                   }
                 >
-                  <SelectTrigger className="bg-[#0f0f0f] border-[#2a2a2a] text-xs">
+                  <SelectTrigger className="border border-white/60 bg-white/70 text-xs">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#141414] border-[#2a2a2a]">
+                  <SelectContent className="border border-white/60 bg-white/80">
                     {employmentOptions.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {opt.label}
@@ -522,7 +522,7 @@ export default function EmployeesDashboardPage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs text-[#888888]">
+                <label className="text-xs text-slate-600">
                   {t("label.contractHours")}
                 </label>
                 <Input
@@ -531,11 +531,11 @@ export default function EmployeesDashboardPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, contractHours: e.target.value }))
                   }
-                  className="bg-[#0f0f0f] border-[#2a2a2a] text-sm"
+                  className="border border-white/60 bg-white/70 text-sm"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-[#888888]">
+                <label className="text-xs text-slate-600">
                   {t("label.maxWeeklyHours")}
                 </label>
                 <Input
@@ -544,14 +544,14 @@ export default function EmployeesDashboardPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, maxWeeklyHours: e.target.value }))
                   }
-                  className="bg-[#0f0f0f] border-[#2a2a2a] text-sm"
+                  className="border border-white/60 bg-white/70 text-sm"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs text-[#888888]">
+                <label className="text-xs text-slate-600">
                   {t("label.hourlyRate")}
                 </label>
                 <Input
@@ -560,7 +560,7 @@ export default function EmployeesDashboardPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, hourlyRate: e.target.value }))
                   }
-                  className="bg-[#0f0f0f] border-[#2a2a2a] text-sm"
+                  className="border border-white/60 bg-white/70 text-sm"
                 />
               </div>
               <div className="space-y-1">
@@ -582,7 +582,7 @@ export default function EmployeesDashboardPage() {
             <Button
               variant="outline"
               size="sm"
-              className="border-[#2a2a2a] text-[#f0f0f0]"
+            className="glass-button border-none bg-white/70 text-slate-900"
               onClick={closeForm}
               disabled={saving}
             >
@@ -590,7 +590,7 @@ export default function EmployeesDashboardPage() {
             </Button>
             <Button
               size="sm"
-              className="bg-[#e8b84b] text-black hover:bg-[#f0c75c]"
+              className="glass-button bg-white/80 text-slate-900 hover:brightness-105"
               onClick={handleSubmit}
               disabled={saving}
             >
@@ -606,12 +606,12 @@ export default function EmployeesDashboardPage() {
         open={isDeleteOpen}
         onOpenChange={(open) => !open && closeDelete()}
       >
-        <DialogContent className="bg-[#141414] border-[#2a2a2a]">
+        <DialogContent className="glass-card border-none bg-white/80">
           <DialogHeader>
-            <DialogTitle className="font-mono text-[#f0f0f0]">
+            <DialogTitle className="font-mono text-slate-900">
               {t("employees.deleteEmployee")}
             </DialogTitle>
-            <DialogDescription className="text-sm text-[#bbbbbb]">
+            <DialogDescription className="text-sm text-slate-700">
               {t("employees.deleteConfirm")}
             </DialogDescription>
           </DialogHeader>
@@ -619,7 +619,7 @@ export default function EmployeesDashboardPage() {
             <Button
               variant="outline"
               size="sm"
-              className="border-[#2a2a2a] text-[#f0f0f0]"
+              className="glass-button border-none bg-white/70 text-slate-900"
               onClick={closeDelete}
               disabled={deleting}
             >
@@ -627,7 +627,7 @@ export default function EmployeesDashboardPage() {
             </Button>
             <Button
               size="sm"
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="bg-red-500 text-white hover:bg-red-600 rounded-full px-4"
               onClick={handleDelete}
               disabled={deleting}
             >
