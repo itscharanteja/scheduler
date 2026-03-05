@@ -15,7 +15,6 @@ if (
   process.env.NODE_ENV === "development" &&
   (!supabaseUrl || !supabaseAnonKey)
 ) {
-  // eslint-disable-next-line no-console
   console.warn(
     "[supabase] Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (copy from .env.example), then restart the dev server."
   );
@@ -70,6 +69,10 @@ type DbShiftRow = {
   notes: string | null;
   created_at: string;
   employee_name?: string | null;
+};
+
+type DbShiftRowWithEmployee = Omit<DbShiftRow, "employee_name"> & {
+  employees?: { name: string } | null;
 };
 
 function mapEmployee(row: DbEmployeeRow): Employee {
@@ -165,9 +168,9 @@ export async function getShiftsByWeek(
     const { data, error } = await query.order("date", { ascending: true });
     if (error) throw error;
 
-    const mappedShifts: Shift[] = (data as any[]).map((row) =>
+    const mappedShifts: Shift[] = (data as DbShiftRowWithEmployee[]).map((row) =>
       mapShift({
-        ...(row as any),
+        ...row,
         employee_name: row.employees?.name ?? null,
       })
     );
@@ -210,9 +213,9 @@ export async function getShiftsByMonth(
     const { data, error } = await query.order("date", { ascending: true });
     if (error) throw error;
 
-    return (data as any[]).map((row) =>
+    return (data as DbShiftRowWithEmployee[]).map((row) =>
       mapShift({
-        ...(row as any),
+        ...row,
         employee_name: row.employees?.name ?? null,
       })
     );
@@ -257,9 +260,10 @@ export async function createShift(input: CreateShiftInput): Promise<Shift> {
 
   if (error) throw error;
 
+  const typedData = data as DbShiftRowWithEmployee;
   return mapShift({
-    ...(data as any),
-    employee_name: (data as any).employees?.name ?? null,
+    ...typedData,
+    employee_name: typedData.employees?.name ?? null,
   });
 }
 
@@ -295,9 +299,10 @@ export async function updateShift(
 
   if (error) throw error;
 
+  const typedData = data as DbShiftRowWithEmployee;
   return mapShift({
-    ...(data as any),
-    employee_name: (data as any).employees?.name ?? null,
+    ...typedData,
+    employee_name: typedData.employees?.name ?? null,
   });
 }
 

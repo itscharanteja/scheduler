@@ -101,7 +101,10 @@ export default function DaySchedulePage() {
   const weekStart = useMemo(() => parseWeekParam(weekParam), [weekParam]);
   const fallbackDay = format(weekStart, "yyyy-MM-dd");
   const selectedDay = dateParam ?? fallbackDay;
-  const selectedDate = new Date(`${selectedDay}T00:00:00`);
+  const selectedDate = useMemo(
+    () => new Date(`${selectedDay}T00:00:00`),
+    [selectedDay]
+  );
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [dayShifts, setDayShifts] = useState<Shift[]>([]);
