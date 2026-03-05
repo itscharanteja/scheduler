@@ -4,7 +4,6 @@ import React, {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useState,
   type ReactNode,
 } from "react";
@@ -258,17 +257,11 @@ export function LanguageProvider({
   initialLang = "en",
   children,
 }: LanguageProviderProps) {
-  const [lang, setLangState] = useState<SupportedLanguage>(initialLang);
-
-  useEffect(() => {
-    const saved =
-      typeof window !== "undefined"
-        ? window.localStorage.getItem("scheduler_lang")
-        : null;
-    if (saved === "en" || saved === "sv") {
-      setLangState(saved);
-    }
-  }, []);
+  const [lang, setLangState] = useState<SupportedLanguage>(() => {
+    if (typeof window === "undefined") return initialLang;
+    const saved = window.localStorage.getItem("scheduler_lang");
+    return saved === "en" || saved === "sv" ? saved : initialLang;
+  });
 
   const setLang = useCallback((next: SupportedLanguage) => {
     setLangState(next);

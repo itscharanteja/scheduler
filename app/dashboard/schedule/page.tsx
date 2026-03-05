@@ -70,6 +70,36 @@ function shiftHours(startTime: string, endTime: string): number {
   return (eh * 60 + em - sh * 60 - sm) / 60;
 }
 
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function countOverlappingShifts(shifts: Shift[]): number {
+  const byEmployee = new Map<string, Shift[]>();
+  shifts.forEach((shift) => {
+    const list = byEmployee.get(shift.employeeId) ?? [];
+    list.push(shift);
+    byEmployee.set(shift.employeeId, list);
+  });
+
+  let count = 0;
+  byEmployee.forEach((employeeShifts) => {
+    const ordered = employeeShifts
+      .slice()
+      .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+    for (let i = 1; i < ordered.length; i++) {
+      const prev = ordered[i - 1];
+      const current = ordered[i];
+      if (prev.date === current.date && prev.endTime > current.startTime) {
+        count += 1;
+      }
+    }
+  });
+
+  return count;
+}
+
 type Period = (typeof PERIOD_OPTIONS)[number];
 
 function to12hParts(time24: string): { hour: string; minute: string; period: Period } {
@@ -350,42 +380,6 @@ function DayScheduleView() {
     }));
   }, [employees, selectedDay]);
 
-  const startParts = useMemo(() => to12hParts(form.startTime), [form.startTime]);
-  const endParts = useMemo(() => to12hParts(form.endTime), [form.endTime]);
-
-  const updateTimeField = useCallback(
-    (
-      field: "startTime" | "endTime",
-      patch: Partial<{ hour: string; minute: string; period: Period }>
-    ) => {
-      setForm((prev) => {
-        const current = to12hParts(prev[field]);
-        const next = {
-          hour: patch.hour ?? current.hour,
-          minute: patch.minute ?? current.minute,
-          period: patch.period ?? current.period,
-        };
-        return {
-          ...prev,
-          [field]: from12hParts(next.hour, next.minute, next.period),
-        };
-      });
-    },
-    []
-  );
-
-  function openAdd(day: string) {
-    setAddModalDay(day);
-    setForm({
-      ...emptyShiftForm,
-      date: day,
-      startTime: "10:00",
-      endTime: "18:00",
-    });
-    if (employees.length) setForm((f) => ({ ...f, employeeId: employees[0].id, role: employees[0].role }));
-    setAddModalOpen(true);
-  }
-
   function openAddModal() {
     setForm({
       ...emptyShiftForm,
@@ -400,6 +394,20 @@ function DayScheduleView() {
   function closeAddModal() {
     setAddModalOpen(false);
     setForm((prev) => ({ ...prev, date: selectedDay }));
+  }
+
+  function openShiftModal(shift: Shift) {
+    setSelectedShift(shift);
+    setModalStartTime(shift.startTime.slice(0, 5));
+    setModalEndTime(shift.endTime.slice(0, 5));
+    setShiftModalOpen(true);
+  }
+
+  function closeShiftModal() {
+    setShiftModalOpen(false);
+    setSelectedShift(null);
+    setModalStartTime("");
+    setModalEndTime("");
   }
 
   async function handleCreateDayShift() {
@@ -925,6 +933,30 @@ function WeekScheduleView() {
       { value: "rutin", label: t("role.rutin") },
     ],
     [t]
+  );
+
+  const startParts = useMemo(() => to12hParts(form.startTime), [form.startTime]);
+  const endParts = useMemo(() => to12hParts(form.endTime), [form.endTime]);
+
+  const updateTimeField = useCallback(
+    (
+      field: "startTime" | "endTime",
+      patch: Partial<{ hour: string; minute: string; period: Period }>
+    ) => {
+      setForm((prev) => {
+        const current = to12hParts(prev[field]);
+        const next = {
+          hour: patch.hour ?? current.hour,
+          minute: patch.minute ?? current.minute,
+          period: patch.period ?? current.period,
+        };
+        return {
+          ...prev,
+          [field]: from12hParts(next.hour, next.minute, next.period),
+        };
+      });
+    },
+    []
   );
 
   function openAdd(day: string) {
@@ -1541,6 +1573,30 @@ function MonthScheduleView() {
       averageShiftsPerEmployee,
     };
   }, [shifts]);
+
+  const startParts = useMemo(() => to12hParts(form.startTime), [form.startTime]);
+  const endParts = useMemo(() => to12hParts(form.endTime), [form.endTime]);
+
+  const updateTimeField = useCallback(
+    (
+      field: "startTime" | "endTime",
+      patch: Partial<{ hour: string; minute: string; period: Period }>
+    ) => {
+      setForm((prev) => {
+        const current = to12hParts(prev[field]);
+        const next = {
+          hour: patch.hour ?? current.hour,
+          minute: patch.minute ?? current.minute,
+          period: patch.period ?? current.period,
+        };
+        return {
+          ...prev,
+          [field]: from12hParts(next.hour, next.minute, next.period),
+        };
+      });
+    },
+    []
+  );
 
   function openShiftModal(shift: Shift) {
     setSelectedShift(shift);
