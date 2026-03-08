@@ -140,63 +140,65 @@ export default function DashboardAiAgentPage() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-ai-panel glass-interactive p-5">
-        <div className="mb-4">
-          <h2 className="font-mono text-lg text-slate-900">{text.title}</h2>
-          <p className="mt-1 text-sm text-slate-600">{text.subtitle}</p>
-          <p className="mt-2 text-xs font-mono tracking-wide text-slate-500">
-            {weekLabel}
-          </p>
-        </div>
-
-        {!isSupabaseConfigured && (
-          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            {text.notConfigured}
+      <div className="ai-intelligence-border">
+        <section className="glass-ai-panel ai-intelligence-inner glass-interactive p-5">
+          <div className="mb-4">
+            <h2 className="font-mono text-lg text-slate-900">{text.title}</h2>
+            <p className="mt-1 text-sm text-slate-600">{text.subtitle}</p>
+            <p className="mt-2 text-xs font-mono tracking-wide text-slate-500">
+              {weekLabel}
+            </p>
           </div>
-        )}
 
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder={text.placeholder}
-          className="h-36 w-full resize-y rounded-2xl border border-white/60 bg-white/70 p-3 text-sm text-slate-900 outline-none ring-0 placeholder:text-slate-400 focus:border-slate-400"
-        />
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          {text.examples.map((example) => (
-            <button
-              key={example}
-              type="button"
-              onClick={() => setPrompt(example)}
-              className="glass-chip px-3 py-1.5 text-xs text-slate-800 hover:brightness-105"
-            >
-              {example}
-            </button>
-          ))}
-        </div>
-
-        <Button
-          onClick={() => generate()}
-          disabled={generating || loadingData || !prompt.trim() || !isSupabaseConfigured}
-          className="mt-4 h-10 w-full glass-button font-semibold text-slate-900 hover:brightness-105"
-        >
-          {generating ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {text.generate}
-            </>
-          ) : (
-            <>
-              <Sparkles className="mr-2 h-4 w-4" />
-              {text.generate}
-            </>
+          {!isSupabaseConfigured && (
+            <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {text.notConfigured}
+            </div>
           )}
-        </Button>
 
-        {loadingData && (
-          <div className="mt-3 text-xs text-[#888]">{text.loading}</div>
-        )}
-      </section>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder={text.placeholder}
+            className="h-36 w-full resize-y rounded-2xl border border-white/60 bg-white/70 p-3 text-sm text-slate-900 outline-none ring-0 placeholder:text-slate-400 focus:border-slate-400"
+          />
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {text.examples.map((example) => (
+              <button
+                key={example}
+                type="button"
+                onClick={() => setPrompt(example)}
+                className="glass-chip px-3 py-1.5 text-xs text-slate-800 hover:brightness-105"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+
+          <Button
+            onClick={() => generate()}
+            disabled={generating || loadingData || !prompt.trim() || !isSupabaseConfigured}
+            className="mt-4 h-10 w-full glass-button font-semibold text-slate-900 hover:brightness-105"
+          >
+            {generating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {text.generate}
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                {text.generate}
+              </>
+            )}
+          </Button>
+
+          {loadingData && (
+            <div className="mt-3 text-xs text-[#888]">{text.loading}</div>
+          )}
+        </section>
+      </div>
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
