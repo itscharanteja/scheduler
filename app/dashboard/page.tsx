@@ -399,20 +399,22 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="glass-card p-5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-slate-900/80" />
-            <div className="text-sm font-semibold text-slate-900">
-              AI Optimization Suggestions
+        <div className="ai-intelligence-border">
+          <div className="glass-card ai-intelligence-inner relative z-10 p-5">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-slate-900/80" />
+              <div className="text-sm font-semibold text-slate-900">
+                AI Optimization Suggestions
+              </div>
             </div>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              {aiSuggestions.map((suggestion) => (
+                <li key={suggestion} className="glass-muted rounded-xl border border-white/70 px-3 py-2">
+                  {suggestion}
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="mt-3 space-y-2 text-sm text-slate-700">
-            {aiSuggestions.map((suggestion) => (
-              <li key={suggestion} className="glass-muted rounded-xl border border-white/70 px-3 py-2">
-                {suggestion}
-              </li>
-            ))}
-          </ul>
         </div>
 
         <div className="glass-card p-5">

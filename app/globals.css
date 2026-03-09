@@ -480,3 +480,139 @@
   mix-blend-mode: screen;
   pointer-events: none;
 }
+
+/* Dashboard AI suggestions animated border */
+.ai-suggestions-border {
+  position: relative;
+  padding: 2px;
+  border-radius: 22px;
+  background: linear-gradient(
+    120deg,
+    rgba(80, 150, 255, 0.7),
+    rgba(150, 120, 255, 0.7),
+    rgba(120, 220, 255, 0.7),
+    rgba(255, 180, 220, 0.6),
+    rgba(80, 150, 255, 0.7)
+  );
+  background-size: 260% 260%;
+  animation: aiBorderFlow 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.ai-suggestions-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: inherit;
+  filter: blur(10px);
+  opacity: 0.22;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.ai-suggestions-border > .glass-card {
+  border-radius: 20px !important;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes aiBorderFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Dashboard AI optimization card: thin animated border stroke only */
+.ai-intelligence-border {
+  position: relative;
+  padding: 4px;
+  border-radius: 22px;
+  isolation: isolate;
+  overflow: visible;
+  background: conic-gradient(
+    from 18deg at 50% 50%,
+    #4f93df 0deg,
+    #8467df 95deg,
+    #55d6e2 190deg,
+    #de9ec9 285deg,
+    #4f93df 360deg
+  );
+  background-size: 185% 185%;
+  animation: aiBorderTrackFlow 7s linear infinite;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.28) inset,
+    0 6px 16px rgba(79, 147, 223, 0.12);
+}
+
+.ai-intelligence-border::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: inherit;
+  animation: inherit;
+  background-size: inherit;
+  pointer-events: none;
+  z-index: -1;
+  filter: blur(11px);
+  opacity: 0.2;
+}
+
+.ai-intelligence-border::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 30px;
+  pointer-events: none;
+  z-index: -2;
+  background:
+    radial-gradient(40% 48% at 12% 24%, rgba(79, 147, 223, 0.28), transparent 72%),
+    radial-gradient(44% 44% at 86% 22%, rgba(132, 103, 223, 0.24), transparent 74%),
+    radial-gradient(42% 50% at 82% 78%, rgba(85, 214, 226, 0.22), transparent 76%),
+    radial-gradient(38% 46% at 18% 82%, rgba(222, 158, 201, 0.2), transparent 74%);
+  filter: blur(14px) saturate(115%);
+  opacity: 0.36;
+  animation: aiAuroraFlow 8.5s linear infinite;
+}
+
+.ai-intelligence-inner {
+  position: relative;
+  z-index: 1;
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(24px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
+}
+
+@keyframes aiBorderTrackFlow {
+  0% {
+    background-position: 22% 18%;
+  }
+  50% {
+    background-position: 78% 84%;
+  }
+  100% {
+    background-position: 22% 18%;
+  }
+}
+
+@keyframes aiAuroraFlow {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.99);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate3d(0, -1px, 0) scale(1.01);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.99);
+    opacity: 0.3;
+  }
+}
