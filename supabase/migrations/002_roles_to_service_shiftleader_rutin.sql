@@ -1,3 +1,4 @@
+
 -- Run this only if you already applied 001 with the old roles (grill, counter, manager, cashier, cleaner).
 -- Drops the old role check and adds the new one; maps existing data to the new roles.
 

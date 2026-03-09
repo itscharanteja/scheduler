@@ -1,11 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Employee, Shift, WeekSchedule } from "./types";
-import {
-  addDays,
-  endOfMonth,
-  startOfMonth,
-  startOfWeek,
-} from "date-fns";
+import { addDays, endOfMonth, startOfMonth, startOfWeek } from "date-fns";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
@@ -16,7 +11,7 @@ if (
   (!supabaseUrl || !supabaseAnonKey)
 ) {
   console.warn(
-    "[supabase] Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (copy from .env.example), then restart the dev server."
+    "[supabase] Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (copy from .env.example), then restart the dev server.",
   );
 }
 
@@ -28,13 +23,10 @@ export const supabaseClient: SupabaseClient | undefined =
 /** True when NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set. */
 export const isSupabaseConfigured = Boolean(supabaseClient);
 
-function normalizeSupabaseError(
-  error: unknown,
-  operation: string
-): Error {
+function normalizeSupabaseError(error: unknown, operation: string): Error {
   if (error instanceof Error && /Failed to fetch/i.test(error.message)) {
     return new Error(
-      `[supabase:${operation}] Network error: unable to reach Supabase. Check internet, VPN/firewall, and that your Supabase project is active.`
+      `[supabase:${operation}] Network error: unable to reach Supabase. Check internet, VPN/firewall, and that your Supabase project is active.`,
     );
   }
   if (error instanceof Error) {
@@ -72,7 +64,7 @@ type DbShiftRow = {
 };
 
 type DbShiftRowWithEmployee = Omit<DbShiftRow, "employee_name"> & {
-  employees?: { name: string } | null;
+  employees?: { name: string }[] | null;
 };
 
 function mapEmployee(row: DbEmployeeRow): Employee {
@@ -111,7 +103,7 @@ function mapShift(row: DbShiftRow): Shift {
 function requireClient(): SupabaseClient {
   if (!supabaseClient) {
     throw new Error(
-      "Supabase client is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY."
+      "Supabase client is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
     );
   }
   return supabaseClient;
@@ -136,12 +128,12 @@ export async function getEmployees(): Promise<Employee[]> {
 
 export async function getShiftsByWeek(
   weekStart: string | Date,
-  locationId?: string
+  locationId?: string,
 ): Promise<WeekSchedule> {
   try {
     const start = startOfWeek(
       typeof weekStart === "string" ? new Date(weekStart) : weekStart,
-      { weekStartsOn: 1 }
+      { weekStartsOn: 1 },
     );
     if (!supabaseClient) {
       return {
@@ -156,7 +148,7 @@ export async function getShiftsByWeek(
     let query = supabaseClient
       .from("shifts")
       .select(
-        "id, employee_id, date, start_time, end_time, role, location_id, status, created_by_ai, notes, created_at, employees(name)"
+        "id, employee_id, date, start_time, end_time, role, location_id, status, created_by_ai, notes, created_at, employees(name)",
       )
       .gte("date", start.toISOString().slice(0, 10))
       .lte("date", end.toISOString().slice(0, 10));
@@ -168,11 +160,12 @@ export async function getShiftsByWeek(
     const { data, error } = await query.order("date", { ascending: true });
     if (error) throw error;
 
-    const mappedShifts: Shift[] = (data as DbShiftRowWithEmployee[]).map((row) =>
-      mapShift({
-        ...row,
-        employee_name: row.employees?.name ?? null,
-      })
+    const mappedShifts: Shift[] = (data as DbShiftRowWithEmployee[]).map(
+      (row) =>
+        mapShift({
+          ...row,
+          employee_name: row.employees?.[0]?.name ?? null,
+        }),
     );
 
     return {
@@ -188,7 +181,7 @@ export async function getShiftsByWeek(
 
 export async function getShiftsByMonth(
   monthDate: string | Date,
-  locationId?: string
+  locationId?: string,
 ): Promise<Shift[]> {
   try {
     const base =
@@ -201,7 +194,7 @@ export async function getShiftsByMonth(
     let query = supabaseClient
       .from("shifts")
       .select(
-        "id, employee_id, date, start_time, end_time, role, location_id, status, created_by_ai, notes, created_at, employees(name)"
+        "id, employee_id, date, start_time, end_time, role, location_id, status, created_by_ai, notes, created_at, employees(name)",
       )
       .gte("date", start.toISOString().slice(0, 10))
       .lte("date", end.toISOString().slice(0, 10));
@@ -216,8 +209,8 @@ export async function getShiftsByMonth(
     return (data as DbShiftRowWithEmployee[]).map((row) =>
       mapShift({
         ...row,
-        employee_name: row.employees?.name ?? null,
-      })
+        employee_name: row.employees?.[0]?.name ?? null,
+      }),
     );
   } catch (error) {
     throw normalizeSupabaseError(error, "getShiftsByMonth");
@@ -254,7 +247,7 @@ export async function createShift(input: CreateShiftInput): Promise<Shift> {
       notes: input.notes ?? null,
     })
     .select(
-      "id, employee_id, date, start_time, end_time, role, location_id, status, created_by_ai, notes, created_at, employees(name)"
+      "id, employee_id, date, start_time, end_time, role, location_id, status, created_by_ai, notes, created_at, employees(name)",
     )
     .single();
 
@@ -263,7 +256,7 @@ export async function createShift(input: CreateShiftInput): Promise<Shift> {
   const typedData = data as DbShiftRowWithEmployee;
   return mapShift({
     ...typedData,
-    employee_name: typedData.employees?.name ?? null,
+    employee_name: typedData.employees?.[0]?.name ?? null,
   });
 }
 
@@ -273,7 +266,7 @@ export type UpdateShiftInput = Partial<Omit<CreateShiftInput, "employeeId">> & {
 
 export async function updateShift(
   id: string,
-  input: UpdateShiftInput
+  input: UpdateShiftInput,
 ): Promise<Shift> {
   const client = requireClient();
   const payload: Record<string, unknown> = {};
@@ -285,7 +278,8 @@ export async function updateShift(
   if (input.role !== undefined) payload.role = input.role;
   if (input.locationId !== undefined) payload.location_id = input.locationId;
   if (input.status !== undefined) payload.status = input.status;
-  if (input.createdByAi !== undefined) payload.created_by_ai = input.createdByAi;
+  if (input.createdByAi !== undefined)
+    payload.created_by_ai = input.createdByAi;
   if (input.notes !== undefined) payload.notes = input.notes;
 
   const { data, error } = await client
@@ -293,7 +287,7 @@ export async function updateShift(
     .update(payload)
     .eq("id", id)
     .select(
-      "id, employee_id, date, start_time, end_time, role, location_id, status, created_by_ai, notes, created_at, employees(name)"
+      "id, employee_id, date, start_time, end_time, role, location_id, status, created_by_ai, notes, created_at, employees(name)",
     )
     .single();
 
@@ -302,7 +296,7 @@ export async function updateShift(
   const typedData = data as DbShiftRowWithEmployee;
   return mapShift({
     ...typedData,
-    employee_name: typedData.employees?.name ?? null,
+    employee_name: typedData.employees?.[0]?.name ?? null,
   });
 }
 
@@ -326,7 +320,7 @@ export type CreateEmployeeInput = {
 };
 
 export async function createEmployee(
-  input: CreateEmployeeInput
+  input: CreateEmployeeInput,
 ): Promise<Employee> {
   const client = requireClient();
   const { data, error } = await client
@@ -353,7 +347,7 @@ export type UpdateEmployeeInput = Partial<CreateEmployeeInput>;
 
 export async function updateEmployee(
   id: string,
-  input: UpdateEmployeeInput
+  input: UpdateEmployeeInput,
 ): Promise<Employee> {
   const client = requireClient();
   const payload: Record<string, unknown> = {};

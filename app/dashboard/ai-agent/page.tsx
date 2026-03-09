@@ -1,8 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { addDays, format, getISOWeek, setISOWeek, setISOWeekYear, startOfWeek } from "date-fns";
+import {
+  addDays,
+  format,
+  getISOWeek,
+  setISOWeek,
+  setISOWeekYear,
+  startOfWeek,
+} from "date-fns";
 import { Loader2, Sparkles, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/context/LanguageContext";
@@ -94,12 +101,12 @@ function roleChipClass(role: string): string {
   }
 }
 
-export default function DashboardAiAgentPage() {
+function DashboardAiAgentContent() {
   const { lang } = useLanguage();
   const searchParams = useSearchParams();
   const weekStart = useMemo(
     () => parseWeekParam(searchParams.get("week")),
-    [searchParams]
+    [searchParams],
   );
   const text = COPY[lang];
 
@@ -120,11 +127,11 @@ export default function DashboardAiAgentPage() {
 
   const dayDates = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
-    [weekStart]
+    [weekStart],
   );
   const dayOrder = useMemo(
     () => dayDates.map((day) => format(day, "yyyy-MM-dd")),
-    [dayDates]
+    [dayDates],
   );
   const groupedGenerated = useMemo(() => {
     const map: Record<string, NonNullable<typeof result>["shifts"]> = {};
@@ -178,7 +185,12 @@ export default function DashboardAiAgentPage() {
 
           <Button
             onClick={() => generate()}
-            disabled={generating || loadingData || !prompt.trim() || !isSupabaseConfigured}
+            disabled={
+              generating ||
+              loadingData ||
+              !prompt.trim() ||
+              !isSupabaseConfigured
+            }
             className="mt-4 h-10 w-full glass-button font-semibold text-slate-900 hover:brightness-105"
           >
             {generating ? (
@@ -230,7 +242,9 @@ export default function DashboardAiAgentPage() {
               size="sm"
               className="glass-button bg-white/80 text-slate-900 hover:brightness-105"
               onClick={applyGenerated}
-              disabled={applying || !result?.shifts?.length || !isSupabaseConfigured}
+              disabled={
+                applying || !result?.shifts?.length || !isSupabaseConfigured
+              }
             >
               {applying ? (
                 <>
@@ -295,7 +309,8 @@ export default function DashboardAiAgentPage() {
                         >
                           <Sparkles className="h-3 w-3 shrink-0 opacity-80" />
                           <span className="truncate">
-                            {shift.employeeName} • {shift.startTime}–{shift.endTime}
+                            {shift.employeeName} • {shift.startTime}–
+                            {shift.endTime}
                           </span>
                         </div>
                       ))
@@ -339,5 +354,13 @@ export default function DashboardAiAgentPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+export default function DashboardAiAgentPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DashboardAiAgentContent />
+    </Suspense>
   );
 }

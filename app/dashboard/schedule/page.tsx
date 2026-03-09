@@ -1,26 +1,68 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { addDays, addMonths, eachDayOfInterval, endOfMonth, format, getISOWeek, getISOWeekYear, isSameMonth, setISOWeek, setISOWeekYear, startOfMonth, startOfWeek, subDays } from "date-fns";
-import { ChevronLeft, ChevronRight, Loader2, Plus, Sparkles } from "lucide-react";
+import {
+  addDays,
+  addMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  format,
+  getISOWeek,
+  getISOWeekYear,
+  isSameMonth,
+  setISOWeek,
+  setISOWeekYear,
+  startOfMonth,
+  startOfWeek,
+  subDays,
+} from "date-fns";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { createShift, deleteShift, getEmployees, getShiftsByMonth, getShiftsByWeek, isSupabaseConfigured, updateShift, type CreateShiftInput } from "@/lib/supabase";
+import {
+  createShift,
+  deleteShift,
+  getEmployees,
+  getShiftsByMonth,
+  getShiftsByWeek,
+  isSupabaseConfigured,
+  updateShift,
+  type CreateShiftInput,
+} from "@/lib/supabase";
 import type { Employee, Shift } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 const LOCATION_ID = "11111111-1111-4111-8111-111111111111";
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) =>
-  (i + 1).toString().padStart(2, "0")
+  (i + 1).toString().padStart(2, "0"),
 );
 const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) =>
-  i.toString().padStart(2, "0")
+  i.toString().padStart(2, "0"),
 );
 const PERIOD_OPTIONS = ["AM", "PM"] as const;
 
@@ -87,7 +129,9 @@ function countOverlappingShifts(shifts: Shift[]): number {
   byEmployee.forEach((employeeShifts) => {
     const ordered = employeeShifts
       .slice()
-      .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+      .sort((a, b) =>
+        `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`),
+      );
     for (let i = 1; i < ordered.length; i++) {
       const prev = ordered[i - 1];
       const current = ordered[i];
@@ -102,7 +146,11 @@ function countOverlappingShifts(shifts: Shift[]): number {
 
 type Period = (typeof PERIOD_OPTIONS)[number];
 
-function to12hParts(time24: string): { hour: string; minute: string; period: Period } {
+function to12hParts(time24: string): {
+  hour: string;
+  minute: string;
+  period: Period;
+} {
   const [h, m] = time24.split(":").map(Number);
   if (
     Number.isNaN(h) ||
@@ -126,7 +174,14 @@ function to12hParts(time24: string): { hour: string; minute: string; period: Per
 function from12hParts(hour: string, minute: string, period: Period): string {
   const h = Number.parseInt(hour, 10);
   const m = Number.parseInt(minute, 10);
-  if (Number.isNaN(h) || Number.isNaN(m) || h < 1 || h > 12 || m < 0 || m > 59) {
+  if (
+    Number.isNaN(h) ||
+    Number.isNaN(m) ||
+    h < 1 ||
+    h > 12 ||
+    m < 0 ||
+    m > 59
+  ) {
     return "10:00";
   }
   let hour24 = h % 12;
@@ -286,11 +341,17 @@ function DayScheduleView() {
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const weekStart = useMemo(() => parseWeekParam(searchParams.get("week")), [searchParams]);
+  const weekStart = useMemo(
+    () => parseWeekParam(searchParams.get("week")),
+    [searchParams],
+  );
 
   const dateParam = searchParams.get("date");
   const selectedDay = dateParam ?? format(weekStart, "yyyy-MM-dd");
-  const selectedDate = useMemo(() => new Date(`${selectedDay}T00:00:00`), [selectedDay]);
+  const selectedDate = useMemo(
+    () => new Date(`${selectedDay}T00:00:00`),
+    [selectedDay],
+  );
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [dayShifts, setDayShifts] = useState<Shift[]>([]);
@@ -326,11 +387,15 @@ function DayScheduleView() {
         ]);
         if (!active) return;
         setEmployees(employeeRows);
-        setDayShifts(weekSchedule.shifts.filter((shift) => shift.date === selectedDay));
+        setDayShifts(
+          weekSchedule.shifts.filter((shift) => shift.date === selectedDay),
+        );
       } catch (err) {
         console.error(err);
         if (!active) return;
-        setError(err instanceof Error ? err.message : "Failed to load day schedule.");
+        setError(
+          err instanceof Error ? err.message : "Failed to load day schedule.",
+        );
       } finally {
         if (active) setLoading(false);
       }
@@ -344,8 +409,12 @@ function DayScheduleView() {
   const nextDay = addDays(selectedDate, 1);
 
   const hourLabels = useMemo(
-    () => Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, i) => DAY_START_HOUR + i),
-    []
+    () =>
+      Array.from(
+        { length: DAY_END_HOUR - DAY_START_HOUR + 1 },
+        (_, i) => DAY_START_HOUR + i,
+      ),
+    [],
   );
 
   const shiftsByEmployee = useMemo(() => {
@@ -359,9 +428,13 @@ function DayScheduleView() {
   }, [dayShifts]);
 
   const daySummary = useMemo(() => {
-    const totalHours = dayShifts.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0);
+    const totalHours = dayShifts.reduce(
+      (sum, shift) => sum + shiftHours(shift.startTime, shift.endTime),
+      0,
+    );
     const totalShifts = dayShifts.length;
-    const activeEmployees = new Set(dayShifts.map((shift) => shift.employeeId)).size;
+    const activeEmployees = new Set(dayShifts.map((shift) => shift.employeeId))
+      .size;
     const overlappingShifts = countOverlappingShifts(dayShifts);
     return {
       totalHours,
@@ -376,7 +449,10 @@ function DayScheduleView() {
       ...prev,
       date: selectedDay,
       employeeId: prev.employeeId || employees[0]?.id || "",
-      role: employees.find((employee) => employee.id === (prev.employeeId || employees[0]?.id))?.role ?? prev.role,
+      role:
+        employees.find(
+          (employee) => employee.id === (prev.employeeId || employees[0]?.id),
+        )?.role ?? prev.role,
     }));
   }, [employees, selectedDay]);
 
@@ -415,7 +491,8 @@ function DayScheduleView() {
     setAddSaving(true);
     setError(null);
     const optimisticId = `optimistic-day-${Date.now()}`;
-    const employeeName = employees.find((employee) => employee.id === form.employeeId)?.name ?? "";
+    const employeeName =
+      employees.find((employee) => employee.id === form.employeeId)?.name ?? "";
     const optimisticShift: Shift = {
       id: optimisticId,
       employeeId: form.employeeId,
@@ -430,7 +507,11 @@ function DayScheduleView() {
       notes: form.notes || undefined,
     };
 
-    setDayShifts((prev) => [...prev, optimisticShift].sort((a, b) => a.startTime.localeCompare(b.startTime)));
+    setDayShifts((prev) =>
+      [...prev, optimisticShift].sort((a, b) =>
+        a.startTime.localeCompare(b.startTime),
+      ),
+    );
     try {
       const created = await createShift({
         employeeId: form.employeeId,
@@ -444,8 +525,15 @@ function DayScheduleView() {
       });
       setDayShifts((prev) =>
         prev
-          .map((shift) => (shift.id === optimisticId ? { ...created, employeeName: created.employeeName || employeeName } : shift))
-          .sort((a, b) => a.startTime.localeCompare(b.startTime))
+          .map((shift) =>
+            shift.id === optimisticId
+              ? {
+                  ...created,
+                  employeeName: created.employeeName || employeeName,
+                }
+              : shift,
+          )
+          .sort((a, b) => a.startTime.localeCompare(b.startTime)),
       );
       toast.success("Shift added");
       closeAddModal();
@@ -460,7 +548,13 @@ function DayScheduleView() {
   }
 
   async function handleDayShiftUpdate() {
-    if (!selectedShift || !isSupabaseConfigured || !modalStartTime || !modalEndTime) return;
+    if (
+      !selectedShift ||
+      !isSupabaseConfigured ||
+      !modalStartTime ||
+      !modalEndTime
+    )
+      return;
     setModalSaving(true);
     setError(null);
     try {
@@ -468,7 +562,9 @@ function DayScheduleView() {
         startTime: modalStartTime,
         endTime: modalEndTime,
       });
-      setDayShifts((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      setDayShifts((prev) =>
+        prev.map((s) => (s.id === updated.id ? updated : s)),
+      );
       toast.success("Shift updated");
       closeShiftModal();
     } catch (err) {
@@ -502,16 +598,30 @@ function DayScheduleView() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="glass-button border-none bg-white/75 text-slate-900" asChild>
-            <Link href={`/dashboard/schedule?tab=day&date=${format(prevDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(prevDay, { weekStartsOn: 1 }))}`}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="glass-button border-none bg-white/75 text-slate-900"
+            asChild
+          >
+            <Link
+              href={`/dashboard/schedule?tab=day&date=${format(prevDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(prevDay, { weekStartsOn: 1 }))}`}
+            >
               <ChevronLeft className="h-4 w-4" />
             </Link>
           </Button>
           <div className="font-mono text-sm text-slate-800">
             {format(selectedDate, "EEEE, d MMM yyyy")}
           </div>
-          <Button variant="outline" size="sm" className="glass-button border-none bg-white/75 text-slate-900" asChild>
-            <Link href={`/dashboard/schedule?tab=day&date=${format(nextDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(nextDay, { weekStartsOn: 1 }))}`}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="glass-button border-none bg-white/75 text-slate-900"
+            asChild
+          >
+            <Link
+              href={`/dashboard/schedule?tab=day&date=${format(nextDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(nextDay, { weekStartsOn: 1 }))}`}
+            >
               <ChevronRight className="h-4 w-4" />
             </Link>
           </Button>
@@ -524,7 +634,9 @@ function DayScheduleView() {
               const value = e.target.value;
               const next = new Date(`${value}T00:00:00`);
               if (Number.isNaN(next.getTime())) return;
-              router.push(`/dashboard/schedule?tab=day&date=${value}&week=${toWeekParam(startOfWeek(next, { weekStartsOn: 1 }))}`);
+              router.push(
+                `/dashboard/schedule?tab=day&date=${value}&week=${toWeekParam(startOfWeek(next, { weekStartsOn: 1 }))}`,
+              );
             }}
             className="h-9 w-[164px] border-white/70 bg-white/70 text-xs"
           />
@@ -555,7 +667,10 @@ function DayScheduleView() {
               <div />
               <div className="relative h-8 border-l border-b border-black/5 bg-white/65">
                 {hourLabels.map((hour) => {
-                  const leftPct = ((hour - DAY_START_HOUR) / (DAY_END_HOUR - DAY_START_HOUR)) * 100;
+                  const leftPct =
+                    ((hour - DAY_START_HOUR) /
+                      (DAY_END_HOUR - DAY_START_HOUR)) *
+                    100;
                   const labelHour = hour >= 24 ? hour - 24 : hour;
                   return (
                     <div
@@ -575,7 +690,10 @@ function DayScheduleView() {
             {loading ? (
               <div className="space-y-2 p-2">
                 {Array.from({ length: 6 }).map((_, idx) => (
-                  <div key={`skeleton-${idx}`} className="grid grid-cols-[220px_1fr]">
+                  <div
+                    key={`skeleton-${idx}`}
+                    className="grid grid-cols-[220px_1fr]"
+                  >
                     <div className="h-20 rounded-l-xl border border-black/5 bg-white/70" />
                     <div className="h-20 rounded-r-xl border border-l-0 border-black/5 bg-white/55" />
                   </div>
@@ -584,15 +702,24 @@ function DayScheduleView() {
             ) : (
               <div className="space-y-2 p-2">
                 {employees.map((employee) => {
-                  const employeeShifts = shiftsByEmployee.get(employee.id) ?? [];
+                  const employeeShifts =
+                    shiftsByEmployee.get(employee.id) ?? [];
                   return (
-                    <div key={employee.id} className="grid grid-cols-[220px_1fr]">
+                    <div
+                      key={employee.id}
+                      className="grid grid-cols-[220px_1fr]"
+                    >
                       <div className="flex items-center rounded-l-xl border border-black/5 bg-white/78 px-4 py-4">
-                        <span className="truncate text-sm font-medium text-slate-800">{employee.name}</span>
+                        <span className="truncate text-sm font-medium text-slate-800">
+                          {employee.name}
+                        </span>
                       </div>
                       <div className="relative h-[84px] rounded-r-xl border border-l-0 border-black/5 bg-white/58">
                         {hourLabels.map((hour) => {
-                          const leftPct = ((hour - DAY_START_HOUR) / (DAY_END_HOUR - DAY_START_HOUR)) * 100;
+                          const leftPct =
+                            ((hour - DAY_START_HOUR) /
+                              (DAY_END_HOUR - DAY_START_HOUR)) *
+                            100;
                           return (
                             <div
                               key={`grid-${employee.id}-${hour}`}
@@ -603,13 +730,27 @@ function DayScheduleView() {
                         })}
 
                         {employeeShifts.map((shift) => {
-                          const totalMinutes = (DAY_END_HOUR - DAY_START_HOUR) * 60;
-                          const startMinutes = Math.max(timeToMinutes(shift.startTime), DAY_START_HOUR * 60);
+                          const totalMinutes =
+                            (DAY_END_HOUR - DAY_START_HOUR) * 60;
+                          const startMinutes = Math.max(
+                            timeToMinutes(shift.startTime),
+                            DAY_START_HOUR * 60,
+                          );
                           const rawEnd = timeToMinutes(shift.endTime);
-                          const normalizedEnd = rawEnd < DAY_START_HOUR * 60 ? rawEnd + 24 * 60 : rawEnd;
-                          const endMinutes = Math.min(normalizedEnd, DAY_END_HOUR * 60);
-                          const leftPct = ((startMinutes - DAY_START_HOUR * 60) / totalMinutes) * 100;
-                          const widthPct = ((endMinutes - startMinutes) / totalMinutes) * 100;
+                          const normalizedEnd =
+                            rawEnd < DAY_START_HOUR * 60
+                              ? rawEnd + 24 * 60
+                              : rawEnd;
+                          const endMinutes = Math.min(
+                            normalizedEnd,
+                            DAY_END_HOUR * 60,
+                          );
+                          const leftPct =
+                            ((startMinutes - DAY_START_HOUR * 60) /
+                              totalMinutes) *
+                            100;
+                          const widthPct =
+                            ((endMinutes - startMinutes) / totalMinutes) * 100;
 
                           return (
                             <div
@@ -630,9 +771,12 @@ function DayScheduleView() {
                               }}
                             >
                               <div className="text-[11px] text-slate-700">
-                                {shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)}
+                                {shift.startTime.slice(0, 5)}-
+                                {shift.endTime.slice(0, 5)}
                               </div>
-                              <div className="truncate text-xs font-semibold">{shift.role}</div>
+                              <div className="truncate text-xs font-semibold">
+                                {shift.role}
+                              </div>
                             </div>
                           );
                         })}
@@ -653,38 +797,55 @@ function DayScheduleView() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="glass-muted rounded-xl border border-white/70 p-3">
             <div className="text-[11px] text-slate-600">Total Hours</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">{daySummary.totalHours.toFixed(1)}h</div>
+            <div className="mt-1 font-mono text-sm text-slate-900">
+              {daySummary.totalHours.toFixed(1)}h
+            </div>
           </div>
           <div className="glass-muted rounded-xl border border-white/70 p-3">
             <div className="text-[11px] text-slate-600">Total Shifts</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">{daySummary.totalShifts}</div>
+            <div className="mt-1 font-mono text-sm text-slate-900">
+              {daySummary.totalShifts}
+            </div>
           </div>
           <div className="glass-muted rounded-xl border border-white/70 p-3">
             <div className="text-[11px] text-slate-600">Active Employees</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">{daySummary.activeEmployees}</div>
+            <div className="mt-1 font-mono text-sm text-slate-900">
+              {daySummary.activeEmployees}
+            </div>
           </div>
           <div className="glass-muted rounded-xl border border-white/70 p-3">
             <div className="text-[11px] text-slate-600">Overlapping Shifts</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">{daySummary.overlappingShifts}</div>
+            <div className="mt-1 font-mono text-sm text-slate-900">
+              {daySummary.overlappingShifts}
+            </div>
           </div>
         </div>
       </div>
 
-      <Dialog open={addModalOpen} onOpenChange={(open) => !open && closeAddModal()}>
+      <Dialog
+        open={addModalOpen}
+        onOpenChange={(open) => !open && closeAddModal()}
+      >
         <DialogContent className="glass-card max-w-md border-none bg-white/82">
           <DialogHeader>
-            <DialogTitle className="font-mono text-slate-900">{t("schedule.addShift")}</DialogTitle>
+            <DialogTitle className="font-mono text-slate-900">
+              {t("schedule.addShift")}
+            </DialogTitle>
             <DialogDescription className="text-xs text-slate-600">
               {format(selectedDate, "EEEE, MMM d, yyyy")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <label className="mb-1 block text-xs text-slate-600">{t("label.name")}</label>
+              <label className="mb-1 block text-xs text-slate-600">
+                {t("label.name")}
+              </label>
               <Select
                 value={form.employeeId}
                 onValueChange={(employeeId) => {
-                  const employee = employees.find((item) => item.id === employeeId);
+                  const employee = employees.find(
+                    (item) => item.id === employeeId,
+                  );
                   setForm((prev) => ({
                     ...prev,
                     employeeId,
@@ -705,34 +866,53 @@ function DayScheduleView() {
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-slate-600">{t("label.date")}</label>
-              <Input value={selectedDay} readOnly disabled className="border-white/80 bg-white/70 text-slate-600" />
+              <label className="mb-1 block text-xs text-slate-600">
+                {t("label.date")}
+              </label>
+              <Input
+                value={selectedDay}
+                readOnly
+                disabled
+                className="border-white/80 bg-white/70 text-slate-600"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs text-slate-600">{t("label.startTime")}</label>
+                <label className="mb-1 block text-xs text-slate-600">
+                  {t("label.startTime")}
+                </label>
                 <Input
                   type="time"
                   value={form.startTime}
-                  onChange={(e) => setForm((prev) => ({ ...prev, startTime: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, startTime: e.target.value }))
+                  }
                   className="border-white/80 bg-white/70 text-sm"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-slate-600">{t("label.endTime")}</label>
+                <label className="mb-1 block text-xs text-slate-600">
+                  {t("label.endTime")}
+                </label>
                 <Input
                   type="time"
                   value={form.endTime}
-                  onChange={(e) => setForm((prev) => ({ ...prev, endTime: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, endTime: e.target.value }))
+                  }
                   className="border-white/80 bg-white/70 text-sm"
                 />
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-slate-600">{t("label.notes")}</label>
+              <label className="mb-1 block text-xs text-slate-600">
+                {t("label.notes")}
+              </label>
               <Input
                 value={form.notes}
-                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, notes: e.target.value }))
+                }
                 placeholder={t("label.notes")}
                 className="border-white/80 bg-white/70 text-sm"
               />
@@ -752,7 +932,12 @@ function DayScheduleView() {
               size="sm"
               className="glass-button border-none bg-white/82 text-slate-900"
               onClick={handleCreateDayShift}
-              disabled={addSaving || !form.employeeId || !form.startTime || !form.endTime}
+              disabled={
+                addSaving ||
+                !form.employeeId ||
+                !form.startTime ||
+                !form.endTime
+              }
             >
               {addSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t("button.save")}
@@ -813,7 +998,7 @@ function WeekScheduleView() {
       params.set("tab", "week");
       return `?${params.toString()}`;
     },
-    [searchParams]
+    [searchParams],
   );
 
   const prevWeek = useMemo(() => addDays(weekStart, -7), [weekStart]);
@@ -844,7 +1029,9 @@ function WeekScheduleView() {
       } catch (err) {
         console.error(err);
         if (!isActive) return;
-        setError(err instanceof Error ? err.message : "Failed to load schedule.");
+        setError(
+          err instanceof Error ? err.message : "Failed to load schedule.",
+        );
       } finally {
         if (isActive) setLoading(false);
       }
@@ -876,7 +1063,7 @@ function WeekScheduleView() {
           label: `${t(DAY_KEYS[i])} • ${format(day, "d MMM")}`,
         };
       }),
-    [t, weekStart]
+    [t, weekStart],
   );
 
   function handleCalendarDateChange(value: string) {
@@ -888,7 +1075,10 @@ function WeekScheduleView() {
   }
 
   const weekSummary = useMemo(() => {
-    const byEmployee = new Map<string, { name: string; hours: number; max: number; rate: number }>();
+    const byEmployee = new Map<
+      string,
+      { name: string; hours: number; max: number; rate: number }
+    >();
     employees.forEach((employee) => {
       byEmployee.set(employee.id, {
         name: employee.name,
@@ -912,12 +1102,18 @@ function WeekScheduleView() {
       totalCost += entry.hours * entry.rate;
     });
 
-    const scheduledEmployeeCount = Array.from(byEmployee.values()).filter((entry) => entry.hours > 0).length;
+    const scheduledEmployeeCount = Array.from(byEmployee.values()).filter(
+      (entry) => entry.hours > 0,
+    ).length;
     const totalShifts = shifts.length;
-    const averageHoursPerEmployee = scheduledEmployeeCount > 0 ? totalHours / scheduledEmployeeCount : 0;
+    const averageHoursPerEmployee =
+      scheduledEmployeeCount > 0 ? totalHours / scheduledEmployeeCount : 0;
 
     return {
-      byEmployee: Array.from(byEmployee.entries()).map(([id, value]) => ({ id, ...value })),
+      byEmployee: Array.from(byEmployee.entries()).map(([id, value]) => ({
+        id,
+        ...value,
+      })),
       totalHours,
       totalCost,
       totalShifts,
@@ -932,16 +1128,19 @@ function WeekScheduleView() {
       { value: "shiftleader", label: t("role.shiftleader") },
       { value: "rutin", label: t("role.rutin") },
     ],
-    [t]
+    [t],
   );
 
-  const startParts = useMemo(() => to12hParts(form.startTime), [form.startTime]);
+  const startParts = useMemo(
+    () => to12hParts(form.startTime),
+    [form.startTime],
+  );
   const endParts = useMemo(() => to12hParts(form.endTime), [form.endTime]);
 
   const updateTimeField = useCallback(
     (
       field: "startTime" | "endTime",
-      patch: Partial<{ hour: string; minute: string; period: Period }>
+      patch: Partial<{ hour: string; minute: string; period: Period }>,
     ) => {
       setForm((prev) => {
         const current = to12hParts(prev[field]);
@@ -956,12 +1155,22 @@ function WeekScheduleView() {
         };
       });
     },
-    []
+    [],
   );
 
   function openAdd(day: string) {
-    setForm({ ...emptyShiftForm, date: day, startTime: "10:00", endTime: "18:00" });
-    if (employees.length) setForm((f) => ({ ...f, employeeId: employees[0].id, role: employees[0].role }));
+    setForm({
+      ...emptyShiftForm,
+      date: day,
+      startTime: "10:00",
+      endTime: "18:00",
+    });
+    if (employees.length)
+      setForm((f) => ({
+        ...f,
+        employeeId: employees[0].id,
+        role: employees[0].role,
+      }));
     setAddModalOpen(true);
   }
 
@@ -1008,7 +1217,8 @@ function WeekScheduleView() {
     const optimisticShift: Shift = {
       id: optimisticId,
       employeeId: form.employeeId,
-      employeeName: employees.find((emp) => emp.id === form.employeeId)?.name ?? "",
+      employeeName:
+        employees.find((emp) => emp.id === form.employeeId)?.name ?? "",
       role: form.role,
       date: form.date,
       startTime: form.startTime,
@@ -1019,7 +1229,9 @@ function WeekScheduleView() {
       notes: form.notes || undefined,
     };
 
-    setShifts((prev) => [...prev, optimisticShift].sort((a, b) => a.date.localeCompare(b.date)));
+    setShifts((prev) =>
+      [...prev, optimisticShift].sort((a, b) => a.date.localeCompare(b.date)),
+    );
 
     try {
       const payload: CreateShiftInput = {
@@ -1036,7 +1248,7 @@ function WeekScheduleView() {
       setShifts((prev) =>
         prev
           .map((shift) => (shift.id === optimisticId ? created : shift))
-          .sort((a, b) => a.date.localeCompare(b.date))
+          .sort((a, b) => a.date.localeCompare(b.date)),
       );
       toast.success("Shift added");
       closeAdd();
@@ -1051,7 +1263,13 @@ function WeekScheduleView() {
   }
 
   async function handleWeekShiftUpdate() {
-    if (!selectedShift || !isSupabaseConfigured || !modalStartTime || !modalEndTime) return;
+    if (
+      !selectedShift ||
+      !isSupabaseConfigured ||
+      !modalStartTime ||
+      !modalEndTime
+    )
+      return;
     setModalSaving(true);
     setError(null);
     const previousShift = selectedShift;
@@ -1062,7 +1280,11 @@ function WeekScheduleView() {
       endTime: modalEndTime,
     };
 
-    setShifts((prev) => prev.map((shift) => (shift.id === selectedShift.id ? optimisticShift : shift)));
+    setShifts((prev) =>
+      prev.map((shift) =>
+        shift.id === selectedShift.id ? optimisticShift : shift,
+      ),
+    );
 
     try {
       const updated = await updateShift(selectedShift.id, {
@@ -1074,7 +1296,9 @@ function WeekScheduleView() {
       closeShiftModal();
     } catch (err) {
       console.error(err);
-      setShifts((prev) => prev.map((s) => (s.id === previousShift.id ? previousShift : s)));
+      setShifts((prev) =>
+        prev.map((s) => (s.id === previousShift.id ? previousShift : s)),
+      );
       setError("Failed to update shift.");
       toast.error("Failed to save — try again");
     } finally {
@@ -1107,7 +1331,12 @@ function WeekScheduleView() {
       <div className="min-w-0 flex-1">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" className="glass-button border-none bg-white/75 text-slate-900" asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="glass-button border-none bg-white/75 text-slate-900"
+              asChild
+            >
               <Link href={setWeekParam(prevWeek)}>
                 <ChevronLeft className="h-4 w-4" />
                 {t("schedule.prevWeek")}
@@ -1116,7 +1345,12 @@ function WeekScheduleView() {
             <span className="font-mono text-sm text-slate-800">
               {t("tabs.week")} {weekNumber}, {weekLabel}
             </span>
-            <Button variant="outline" size="sm" className="glass-button border-none bg-white/75 text-slate-900" asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="glass-button border-none bg-white/75 text-slate-900"
+              asChild
+            >
               <Link href={setWeekParam(nextWeek)}>
                 {t("schedule.nextWeek")}
                 <ChevronRight className="h-4 w-4" />
@@ -1159,14 +1393,22 @@ function WeekScheduleView() {
           {loading ? (
             <div className="space-y-2">
               {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-                <div key={i} className="h-14 animate-pulse rounded-2xl border border-white/70 bg-white/55" />
+                <div
+                  key={i}
+                  className="h-14 animate-pulse rounded-2xl border border-white/70 bg-white/55"
+                />
               ))}
             </div>
           ) : !hasShifts ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/70 bg-white/60 py-16 text-center">
               <CalendarIcon className="mb-3 h-12 w-12 text-slate-400" />
-              <p className="text-sm text-slate-600">No shifts this week — add manually or use the AI Agent</p>
-              <Link href="/dashboard/ai-agent" className="mt-2 text-xs text-slate-700 underline underline-offset-4">
+              <p className="text-sm text-slate-600">
+                No shifts this week — add manually or use the AI Agent
+              </p>
+              <Link
+                href="/dashboard/ai-agent"
+                className="mt-2 text-xs text-slate-700 underline underline-offset-4"
+              >
                 Open AI Agent
               </Link>
               <div className="mt-4 flex flex-wrap gap-2 px-4">
@@ -1204,10 +1446,15 @@ function WeekScheduleView() {
                     >
                       {t(DAY_KEYS[i])}
                     </Link>
-                    <div className="w-20 shrink-0 font-mono text-sm text-slate-800">{format(d, "d MMM")}</div>
+                    <div className="w-20 shrink-0 font-mono text-sm text-slate-800">
+                      {format(d, "d MMM")}
+                    </div>
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                       {dayShifts.map((shift) => {
-                        const hours = shiftHours(shift.startTime, shift.endTime);
+                        const hours = shiftHours(
+                          shift.startTime,
+                          shift.endTime,
+                        );
                         return (
                           <div
                             key={shift.id}
@@ -1215,8 +1462,14 @@ function WeekScheduleView() {
                             onClick={() => openShiftModal(shift)}
                             title={`${shift.employeeName} • ${shift.role} • ${hours.toFixed(1)}h`}
                           >
-                            {shift.createdByAi && <Sparkles className="h-3 w-3 shrink-0 text-current opacity-80" />}
-                            <span className="truncate">{shift.employeeName} • {shift.startTime.slice(0, 5)}–{shift.endTime.slice(0, 5)}</span>
+                            {shift.createdByAi && (
+                              <Sparkles className="h-3 w-3 shrink-0 text-current opacity-80" />
+                            )}
+                            <span className="truncate">
+                              {shift.employeeName} •{" "}
+                              {shift.startTime.slice(0, 5)}–
+                              {shift.endTime.slice(0, 5)}
+                            </span>
                           </div>
                         );
                       })}
@@ -1238,19 +1491,27 @@ function WeekScheduleView() {
       </div>
 
       <aside className="glass-card m-[10px] w-full shrink-0 p-4 2xl:!w-[320px] 2xl:!min-w-[320px] 2xl:!basis-[320px]">
-        <h3 className="mb-3 font-mono text-xs font-medium uppercase tracking-wider text-slate-500">{t("schedule.weekSummary")}</h3>
+        <h3 className="mb-3 font-mono text-xs font-medium uppercase tracking-wider text-slate-500">
+          {t("schedule.weekSummary")}
+        </h3>
         <div className="mb-3 space-y-1 rounded-xl border border-white/70 bg-white/55 p-3 text-xs text-slate-600">
           <div className="flex justify-between">
             <span>Total Shifts</span>
-            <span className="font-mono text-slate-900">{weekSummary.totalShifts}</span>
+            <span className="font-mono text-slate-900">
+              {weekSummary.totalShifts}
+            </span>
           </div>
           <div className="flex justify-between">
             <span>Employees Scheduled</span>
-            <span className="font-mono text-slate-900">{weekSummary.scheduledEmployeeCount}</span>
+            <span className="font-mono text-slate-900">
+              {weekSummary.scheduledEmployeeCount}
+            </span>
           </div>
           <div className="flex justify-between">
             <span>Avg Hours / Employee</span>
-            <span className="font-mono text-slate-900">{weekSummary.averageHoursPerEmployee.toFixed(1)}h</span>
+            <span className="font-mono text-slate-900">
+              {weekSummary.averageHoursPerEmployee.toFixed(1)}h
+            </span>
           </div>
         </div>
         <div className="space-y-2 text-sm">
@@ -1258,9 +1519,17 @@ function WeekScheduleView() {
             .filter((e) => e.hours > 0)
             .map((e) => {
               const pct = e.max > 0 ? e.hours / e.max : 0;
-              const color = pct > 1 ? "text-red-500" : pct >= 0.9 ? "text-amber-500" : "text-emerald-600";
+              const color =
+                pct > 1
+                  ? "text-red-500"
+                  : pct >= 0.9
+                    ? "text-amber-500"
+                    : "text-emerald-600";
               return (
-                <div key={e.id} className="flex justify-between gap-2 font-mono">
+                <div
+                  key={e.id}
+                  className="flex justify-between gap-2 font-mono"
+                >
                   <span className="truncate text-slate-800">{e.name}</span>
                   <span className={color}>{e.hours.toFixed(1)}h</span>
                 </div>
@@ -1270,11 +1539,15 @@ function WeekScheduleView() {
         <div className="mt-4 border-t border-black/7 pt-3 text-xs">
           <div className="flex justify-between font-mono text-slate-500">
             <span>{t("schedule.totalHours")}</span>
-            <span className="text-slate-800">{weekSummary.totalHours.toFixed(1)}h</span>
+            <span className="text-slate-800">
+              {weekSummary.totalHours.toFixed(1)}h
+            </span>
           </div>
           <div className="mt-1 flex justify-between font-mono text-slate-500">
             <span>{t("schedule.estimatedCost")}</span>
-            <span className="text-slate-800">{weekSummary.totalCost.toFixed(0)} SEK</span>
+            <span className="text-slate-800">
+              {weekSummary.totalCost.toFixed(0)} SEK
+            </span>
           </div>
         </div>
       </aside>
@@ -1282,12 +1555,18 @@ function WeekScheduleView() {
       <Dialog open={addModalOpen} onOpenChange={(open) => !open && closeAdd()}>
         <DialogContent className="glass-card max-w-md border-none bg-white/82">
           <DialogHeader>
-            <DialogTitle className="font-mono text-slate-900">{t("schedule.addShift")}</DialogTitle>
-            <DialogDescription className="text-xs text-slate-600">{t("schedule.addShift")}</DialogDescription>
+            <DialogTitle className="font-mono text-slate-900">
+              {t("schedule.addShift")}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600">
+              {t("schedule.addShift")}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <label className="mb-1 block text-xs text-slate-600">{t("label.name")}</label>
+              <label className="mb-1 block text-xs text-slate-600">
+                {t("label.name")}
+              </label>
               <Select value={form.employeeId} onValueChange={onSelectEmployee}>
                 <SelectTrigger className="w-full border-white/80 bg-white/70 text-sm">
                   <SelectValue placeholder={t("label.name")} />
@@ -1295,15 +1574,25 @@ function WeekScheduleView() {
                 <SelectContent className="border-white/80 bg-white/85">
                   {employees.map((emp) => (
                     <SelectItem key={emp.id} value={emp.id}>
-                      {emp.name} ({roleOptions.find((option) => option.value === emp.role)?.label ?? emp.role})
+                      {emp.name} (
+                      {roleOptions.find((option) => option.value === emp.role)
+                        ?.label ?? emp.role}
+                      )
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-slate-600">{t("label.date")}</label>
-              <Select value={form.date} onValueChange={(value) => setForm((f) => ({ ...f, date: value }))}>
+              <label className="mb-1 block text-xs text-slate-600">
+                {t("label.date")}
+              </label>
+              <Select
+                value={form.date}
+                onValueChange={(value) =>
+                  setForm((f) => ({ ...f, date: value }))
+                }
+              >
                 <SelectTrigger className="w-full border-white/80 bg-white/70 text-sm">
                   <SelectValue placeholder={t("label.date")} />
                 </SelectTrigger>
@@ -1324,7 +1613,9 @@ function WeekScheduleView() {
                 <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
                   <Select
                     value={startParts.hour}
-                    onValueChange={(v) => updateTimeField("startTime", { hour: v })}
+                    onValueChange={(v) =>
+                      updateTimeField("startTime", { hour: v })
+                    }
                   >
                     <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                       <SelectValue />
@@ -1339,7 +1630,9 @@ function WeekScheduleView() {
                   </Select>
                   <Select
                     value={startParts.minute}
-                    onValueChange={(v) => updateTimeField("startTime", { minute: v })}
+                    onValueChange={(v) =>
+                      updateTimeField("startTime", { minute: v })
+                    }
                   >
                     <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                       <SelectValue />
@@ -1378,7 +1671,9 @@ function WeekScheduleView() {
                 <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
                   <Select
                     value={endParts.hour}
-                    onValueChange={(v) => updateTimeField("endTime", { hour: v })}
+                    onValueChange={(v) =>
+                      updateTimeField("endTime", { hour: v })
+                    }
                   >
                     <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                       <SelectValue />
@@ -1393,7 +1688,9 @@ function WeekScheduleView() {
                   </Select>
                   <Select
                     value={endParts.minute}
-                    onValueChange={(v) => updateTimeField("endTime", { minute: v })}
+                    onValueChange={(v) =>
+                      updateTimeField("endTime", { minute: v })
+                    }
                   >
                     <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                       <SelectValue />
@@ -1408,7 +1705,9 @@ function WeekScheduleView() {
                   </Select>
                   <Select
                     value={endParts.period}
-                    onValueChange={(v) => updateTimeField("endTime", { period: v as Period })}
+                    onValueChange={(v) =>
+                      updateTimeField("endTime", { period: v as Period })
+                    }
                   >
                     <SelectTrigger className="w-[76px] border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                       <SelectValue />
@@ -1425,26 +1724,65 @@ function WeekScheduleView() {
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-slate-600">{t("label.role")}</label>
-              <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
-                <SelectTrigger className="w-full border-white/80 bg-white/70 text-sm"><SelectValue /></SelectTrigger>
+              <label className="mb-1 block text-xs text-slate-600">
+                {t("label.role")}
+              </label>
+              <Select
+                value={form.role}
+                onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}
+              >
+                <SelectTrigger className="w-full border-white/80 bg-white/70 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent className="border-white/80 bg-white/85">
-                  {roleOptions.map((r) => (<SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>))}
+                  {roleOptions.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-slate-600">{t("label.notes")}</label>
-              <Input value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder={t("label.notes")} className="border-white/80 bg-white/70 text-sm" />
+              <label className="mb-1 block text-xs text-slate-600">
+                {t("label.notes")}
+              </label>
+              <Input
+                value={form.notes}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, notes: e.target.value }))
+                }
+                placeholder={t("label.notes")}
+                className="border-white/80 bg-white/70 text-sm"
+              />
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" className="glass-button border-none bg-white/70 text-slate-900" onClick={closeAdd} disabled={saving}>{t("button.cancel")}</Button>
-            <Button size="sm" variant="outline" className="glass-button border-none bg-white/70 text-slate-900" onClick={() => handleCreate()} disabled={saving}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="glass-button border-none bg-white/70 text-slate-900"
+              onClick={closeAdd}
+              disabled={saving}
+            >
+              {t("button.cancel")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="glass-button border-none bg-white/70 text-slate-900"
+              onClick={() => handleCreate()}
+              disabled={saving}
+            >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t("schedule.saveAsDraft")}
             </Button>
-            <Button size="sm" className="glass-button border-none bg-white/82 text-slate-900" onClick={() => handleCreate(true)} disabled={saving}>
+            <Button
+              size="sm"
+              className="glass-button border-none bg-white/82 text-slate-900"
+              onClick={() => handleCreate(true)}
+              disabled={saving}
+            >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t("schedule.publishImmediately")}
             </Button>
@@ -1474,7 +1812,10 @@ function MonthScheduleView() {
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const monthDate = useMemo(() => parseMonthParam(searchParams.get("month")), [searchParams]);
+  const monthDate = useMemo(
+    () => parseMonthParam(searchParams.get("month")),
+    [searchParams],
+  );
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -1491,8 +1832,12 @@ function MonthScheduleView() {
   const [form, setForm] = useState<ShiftFormState>(emptyShiftForm);
 
   const daysInMonth = useMemo(
-    () => eachDayOfInterval({ start: startOfMonth(monthDate), end: endOfMonth(monthDate) }),
-    [monthDate]
+    () =>
+      eachDayOfInterval({
+        start: startOfMonth(monthDate),
+        end: endOfMonth(monthDate),
+      }),
+    [monthDate],
   );
 
   useEffect(() => {
@@ -1516,7 +1861,9 @@ function MonthScheduleView() {
       } catch (err) {
         console.error(err);
         if (!active) return;
-        setError(err instanceof Error ? err.message : "Failed to load month schedule.");
+        setError(
+          err instanceof Error ? err.message : "Failed to load month schedule.",
+        );
       } finally {
         if (active) setLoading(false);
       }
@@ -1558,14 +1905,19 @@ function MonthScheduleView() {
         value: format(day, "yyyy-MM-dd"),
         label: `${format(day, "EEE")} • ${format(day, "d MMM")}`,
       })),
-    [daysInMonth]
+    [daysInMonth],
   );
 
   const monthSummary = useMemo(() => {
     const totalShifts = shifts.length;
-    const totalHours = shifts.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0);
-    const activeEmployees = new Set(shifts.map((shift) => shift.employeeId)).size;
-    const averageShiftsPerEmployee = activeEmployees > 0 ? totalShifts / activeEmployees : 0;
+    const totalHours = shifts.reduce(
+      (sum, shift) => sum + shiftHours(shift.startTime, shift.endTime),
+      0,
+    );
+    const activeEmployees = new Set(shifts.map((shift) => shift.employeeId))
+      .size;
+    const averageShiftsPerEmployee =
+      activeEmployees > 0 ? totalShifts / activeEmployees : 0;
     return {
       totalShifts,
       totalHours,
@@ -1574,13 +1926,16 @@ function MonthScheduleView() {
     };
   }, [shifts]);
 
-  const startParts = useMemo(() => to12hParts(form.startTime), [form.startTime]);
+  const startParts = useMemo(
+    () => to12hParts(form.startTime),
+    [form.startTime],
+  );
   const endParts = useMemo(() => to12hParts(form.endTime), [form.endTime]);
 
   const updateTimeField = useCallback(
     (
       field: "startTime" | "endTime",
-      patch: Partial<{ hour: string; minute: string; period: Period }>
+      patch: Partial<{ hour: string; minute: string; period: Period }>,
     ) => {
       setForm((prev) => {
         const current = to12hParts(prev[field]);
@@ -1595,7 +1950,7 @@ function MonthScheduleView() {
         };
       });
     },
-    []
+    [],
   );
 
   function openShiftModal(shift: Shift) {
@@ -1613,7 +1968,8 @@ function MonthScheduleView() {
   }
 
   function openAddModal() {
-    const defaultDate = monthDateOptions[0]?.value ?? format(monthDate, "yyyy-MM-01");
+    const defaultDate =
+      monthDateOptions[0]?.value ?? format(monthDate, "yyyy-MM-01");
     setForm({
       ...emptyShiftForm,
       date: defaultDate,
@@ -1630,7 +1986,9 @@ function MonthScheduleView() {
 
   async function handleCreateMonthShift() {
     if (!isSupabaseConfigured || !form.employeeId || !form.date) return;
-    const monthAllowed = new Set(monthDateOptions.map((option) => option.value));
+    const monthAllowed = new Set(
+      monthDateOptions.map((option) => option.value),
+    );
     if (!monthAllowed.has(form.date)) {
       setError("Select a date in the current month.");
       return;
@@ -1639,7 +1997,8 @@ function MonthScheduleView() {
     setAddSaving(true);
     setError(null);
     const optimisticId = `optimistic-month-${Date.now()}`;
-    const employeeName = employees.find((employee) => employee.id === form.employeeId)?.name ?? "";
+    const employeeName =
+      employees.find((employee) => employee.id === form.employeeId)?.name ?? "";
     const optimisticShift: Shift = {
       id: optimisticId,
       employeeId: form.employeeId,
@@ -1653,7 +2012,11 @@ function MonthScheduleView() {
       createdByAi: false,
       notes: form.notes || undefined,
     };
-    setShifts((prev) => [...prev, optimisticShift].sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`)));
+    setShifts((prev) =>
+      [...prev, optimisticShift].sort((a, b) =>
+        `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`),
+      ),
+    );
     try {
       const created = await createShift({
         employeeId: form.employeeId,
@@ -1667,8 +2030,17 @@ function MonthScheduleView() {
       });
       setShifts((prev) =>
         prev
-          .map((shift) => (shift.id === optimisticId ? { ...created, employeeName: created.employeeName || employeeName } : shift))
-          .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`))
+          .map((shift) =>
+            shift.id === optimisticId
+              ? {
+                  ...created,
+                  employeeName: created.employeeName || employeeName,
+                }
+              : shift,
+          )
+          .sort((a, b) =>
+            `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`),
+          ),
       );
       toast.success("Shift added");
       closeAddModal();
@@ -1683,7 +2055,13 @@ function MonthScheduleView() {
   }
 
   async function handleMonthShiftUpdate() {
-    if (!selectedShift || !isSupabaseConfigured || !modalStartTime || !modalEndTime) return;
+    if (
+      !selectedShift ||
+      !isSupabaseConfigured ||
+      !modalStartTime ||
+      !modalEndTime
+    )
+      return;
     setModalSaving(true);
     setError(null);
     try {
@@ -1691,7 +2069,9 @@ function MonthScheduleView() {
         startTime: modalStartTime,
         endTime: modalEndTime,
       });
-      setShifts((prev) => prev.map((shift) => (shift.id === updated.id ? updated : shift)));
+      setShifts((prev) =>
+        prev.map((shift) => (shift.id === updated.id ? updated : shift)),
+      );
       setSelectedShift(updated);
       toast.success("Shift updated");
       closeShiftModal();
@@ -1710,7 +2090,9 @@ function MonthScheduleView() {
     setError(null);
     try {
       await deleteShift(selectedShift.id);
-      setShifts((prev) => prev.filter((shift) => shift.id !== selectedShift.id));
+      setShifts((prev) =>
+        prev.filter((shift) => shift.id !== selectedShift.id),
+      );
       toast.success("Shift deleted");
       closeShiftModal();
     } catch (err) {
@@ -1726,17 +2108,31 @@ function MonthScheduleView() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="glass-button border-none bg-white/70 text-slate-900" onClick={() => goToMonth(prevMonth)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="glass-button border-none bg-white/70 text-slate-900"
+            onClick={() => goToMonth(prevMonth)}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="font-mono text-sm text-slate-800">{monthLabel}</span>
-          <Button variant="outline" size="sm" className="glass-button border-none bg-white/70 text-slate-900" onClick={() => goToMonth(nextMonth)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="glass-button border-none bg-white/70 text-slate-900"
+            onClick={() => goToMonth(nextMonth)}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {error && <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      {error && (
+        <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       <div className="glass-month-card p-3">
         <div className="mb-3 flex justify-end">
@@ -1753,29 +2149,47 @@ function MonthScheduleView() {
         {loading ? (
           <div className="h-40 animate-pulse rounded-md bg-white/50" />
         ) : employees.length === 0 ? (
-          <div className="py-10 text-center text-sm text-slate-600">{t("schedule.emptyState")}</div>
+          <div className="py-10 text-center text-sm text-slate-600">
+            {t("schedule.emptyState")}
+          </div>
         ) : (
           <div className="overflow-hidden rounded-[20px] border border-white/75 bg-white/55">
             <div className="overflow-x-auto">
               <div className="min-w-[960px]">
-                <div className="grid text-xs text-slate-600" style={{ gridTemplateColumns }}>
-                  <div className="sticky left-0 z-20 border-r border-black/5 bg-white/90 px-3 py-2 text-left font-mono backdrop-blur-md">{t("label.name")}</div>
+                <div
+                  className="grid text-xs text-slate-600"
+                  style={{ gridTemplateColumns }}
+                >
+                  <div className="sticky left-0 z-20 border-r border-black/5 bg-white/90 px-3 py-2 text-left font-mono backdrop-blur-md">
+                    {t("label.name")}
+                  </div>
                   {daysInMonth.map((day) => (
-                    <div key={day.toISOString()} className="bg-white/50 px-1 py-2 text-center font-mono">
+                    <div
+                      key={day.toISOString()}
+                      className="bg-white/50 px-1 py-2 text-center font-mono"
+                    >
                       <div>{format(day, "d")}</div>
-                      <div className="text-[10px] text-slate-500">{format(day, "EEE")}</div>
+                      <div className="text-[10px] text-slate-500">
+                        {format(day, "EEE")}
+                      </div>
                     </div>
                   ))}
                 </div>
 
                 {employees.map((emp) => (
-                  <div key={emp.id} className="grid border-t border-black/5 first:border-t-0" style={{ gridTemplateColumns }}>
+                  <div
+                    key={emp.id}
+                    className="grid border-t border-black/5 first:border-t-0"
+                    style={{ gridTemplateColumns }}
+                  >
                     <div className="sticky left-0 z-10 flex items-center border-r border-black/5 bg-white/90 px-3 py-3 text-sm text-slate-900 backdrop-blur-md">
                       <span className="truncate">{emp.name}</span>
                     </div>
                     {daysInMonth.map((day) => {
                       const dateKey = format(day, "yyyy-MM-dd");
-                      const empMap = shiftsByEmployeeAndDate.get(emp.id) ?? new Map<string, Shift[]>();
+                      const empMap =
+                        shiftsByEmployeeAndDate.get(emp.id) ??
+                        new Map<string, Shift[]>();
                       const dayShifts = empMap.get(dateKey) ?? [];
                       const inCurrentMonth = isSameMonth(day, monthDate);
 
@@ -1803,10 +2217,17 @@ function MonthScheduleView() {
                                   }}
                                   title={`${shift.employeeName} • ${shift.role} • ${shift.startTime.slice(0, 5)}-${shift.endTime.slice(0, 5)}`}
                                 >
-                                  <span className="truncate">{shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)}</span>
+                                  <span className="truncate">
+                                    {shift.startTime.slice(0, 5)}-
+                                    {shift.endTime.slice(0, 5)}
+                                  </span>
                                 </div>
                               ))}
-                              {dayShifts.length > 3 && <div className="text-center text-[10px] text-slate-500">+{dayShifts.length - 3}</div>}
+                              {dayShifts.length > 3 && (
+                                <div className="text-center text-[10px] text-slate-500">
+                                  +{dayShifts.length - 3}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1821,32 +2242,51 @@ function MonthScheduleView() {
       </div>
 
       <div className="glass-card p-4">
-        <h3 className="mb-3 font-mono text-xs font-medium uppercase tracking-wider text-slate-500">Month Summary</h3>
+        <h3 className="mb-3 font-mono text-xs font-medium uppercase tracking-wider text-slate-500">
+          Month Summary
+        </h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="glass-muted rounded-xl border border-white/70 p-3">
             <div className="text-[11px] text-slate-600">Total Shifts</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">{monthSummary.totalShifts}</div>
+            <div className="mt-1 font-mono text-sm text-slate-900">
+              {monthSummary.totalShifts}
+            </div>
           </div>
           <div className="glass-muted rounded-xl border border-white/70 p-3">
             <div className="text-[11px] text-slate-600">Total Hours</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">{monthSummary.totalHours.toFixed(1)}h</div>
+            <div className="mt-1 font-mono text-sm text-slate-900">
+              {monthSummary.totalHours.toFixed(1)}h
+            </div>
           </div>
           <div className="glass-muted rounded-xl border border-white/70 p-3">
             <div className="text-[11px] text-slate-600">Active Employees</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">{monthSummary.activeEmployees}</div>
+            <div className="mt-1 font-mono text-sm text-slate-900">
+              {monthSummary.activeEmployees}
+            </div>
           </div>
           <div className="glass-muted rounded-xl border border-white/70 p-3">
-            <div className="text-[11px] text-slate-600">Avg Shifts / Employee</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">{monthSummary.averageShiftsPerEmployee.toFixed(1)}</div>
+            <div className="text-[11px] text-slate-600">
+              Avg Shifts / Employee
+            </div>
+            <div className="mt-1 font-mono text-sm text-slate-900">
+              {monthSummary.averageShiftsPerEmployee.toFixed(1)}
+            </div>
           </div>
         </div>
       </div>
 
-      <Dialog open={addModalOpen} onOpenChange={(open) => !open && closeAddModal()}>
+      <Dialog
+        open={addModalOpen}
+        onOpenChange={(open) => !open && closeAddModal()}
+      >
         <DialogContent className="glass-card max-w-md border-none bg-white/82">
           <DialogHeader>
-            <DialogTitle className="font-mono text-slate-900">{t("schedule.addShift")}</DialogTitle>
-            <DialogDescription className="text-xs text-slate-600">{monthLabel}</DialogDescription>
+            <DialogTitle className="font-mono text-slate-900">
+              {t("schedule.addShift")}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600">
+              {monthLabel}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
@@ -1856,7 +2296,9 @@ function MonthScheduleView() {
               <Input
                 type="date"
                 value={form.date}
-                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, date: e.target.value }))
+                }
                 className="border-[#2a2a2a] bg-[#0f0f0f]"
               />
             </div>
@@ -1868,7 +2310,9 @@ function MonthScheduleView() {
                 <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
                   <Select
                     value={startParts.hour}
-                    onValueChange={(v) => updateTimeField("startTime", { hour: v })}
+                    onValueChange={(v) =>
+                      updateTimeField("startTime", { hour: v })
+                    }
                   >
                     <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                       <SelectValue />
@@ -1883,7 +2327,9 @@ function MonthScheduleView() {
                   </Select>
                   <Select
                     value={startParts.minute}
-                    onValueChange={(v) => updateTimeField("startTime", { minute: v })}
+                    onValueChange={(v) =>
+                      updateTimeField("startTime", { minute: v })
+                    }
                   >
                     <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                       <SelectValue />
@@ -1922,7 +2368,9 @@ function MonthScheduleView() {
                 <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
                   <Select
                     value={endParts.hour}
-                    onValueChange={(v) => updateTimeField("endTime", { hour: v })}
+                    onValueChange={(v) =>
+                      updateTimeField("endTime", { hour: v })
+                    }
                   >
                     <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                       <SelectValue />
@@ -1937,7 +2385,9 @@ function MonthScheduleView() {
                   </Select>
                   <Select
                     value={endParts.minute}
-                    onValueChange={(v) => updateTimeField("endTime", { minute: v })}
+                    onValueChange={(v) =>
+                      updateTimeField("endTime", { minute: v })
+                    }
                   >
                     <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                       <SelectValue />
@@ -1952,7 +2402,9 @@ function MonthScheduleView() {
                   </Select>
                   <Select
                     value={endParts.period}
-                    onValueChange={(v) => updateTimeField("endTime", { period: v as Period })}
+                    onValueChange={(v) =>
+                      updateTimeField("endTime", { period: v as Period })
+                    }
                   >
                     <SelectTrigger className="w-[76px] border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                       <SelectValue />
@@ -1969,11 +2421,15 @@ function MonthScheduleView() {
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-slate-600">{t("label.name")}</label>
+              <label className="mb-1 block text-xs text-slate-600">
+                {t("label.name")}
+              </label>
               <Select
                 value={form.employeeId}
                 onValueChange={(employeeId) => {
-                  const employee = employees.find((item) => item.id === employeeId);
+                  const employee = employees.find(
+                    (item) => item.id === employeeId,
+                  );
                   setForm((prev) => ({
                     ...prev,
                     employeeId,
@@ -1995,20 +2451,28 @@ function MonthScheduleView() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs text-slate-600">{t("label.startTime")}</label>
+                <label className="mb-1 block text-xs text-slate-600">
+                  {t("label.startTime")}
+                </label>
                 <Input
                   type="time"
                   value={form.startTime}
-                  onChange={(e) => setForm((prev) => ({ ...prev, startTime: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, startTime: e.target.value }))
+                  }
                   className="border-white/80 bg-white/70 text-sm"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-slate-600">{t("label.endTime")}</label>
+                <label className="mb-1 block text-xs text-slate-600">
+                  {t("label.endTime")}
+                </label>
                 <Input
                   type="time"
                   value={form.endTime}
-                  onChange={(e) => setForm((prev) => ({ ...prev, endTime: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, endTime: e.target.value }))
+                  }
                   className="border-white/80 bg-white/70 text-sm"
                 />
               </div>
@@ -2028,7 +2492,13 @@ function MonthScheduleView() {
               size="sm"
               className="glass-button border-none bg-white/82 text-slate-900"
               onClick={handleCreateMonthShift}
-              disabled={addSaving || !form.employeeId || !form.date || !form.startTime || !form.endTime}
+              disabled={
+                addSaving ||
+                !form.employeeId ||
+                !form.date ||
+                !form.startTime ||
+                !form.endTime
+              }
             >
               {addSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t("button.save")}
@@ -2055,10 +2525,15 @@ function MonthScheduleView() {
   );
 }
 
-export default function ScheduleDashboardPage() {
+function ScheduleDashboardPageContent() {
   const { t } = useLanguage();
   const searchParams = useSearchParams();
-  const defaultTab = searchParams.get("tab") === "day" ? "day" : searchParams.get("tab") === "week" ? "week" : "month";
+  const defaultTab =
+    searchParams.get("tab") === "day"
+      ? "day"
+      : searchParams.get("tab") === "week"
+        ? "week"
+        : "month";
 
   return (
     <Tabs defaultValue={defaultTab} className="space-y-4">
@@ -2067,16 +2542,35 @@ export default function ScheduleDashboardPage() {
         <TabsTrigger value="week">{t("tabs.week")}</TabsTrigger>
         <TabsTrigger value="month">Month</TabsTrigger>
       </TabsList>
-      <TabsContent value="day"><DayScheduleView /></TabsContent>
-      <TabsContent value="week"><WeekScheduleView /></TabsContent>
-      <TabsContent value="month"><MonthScheduleView /></TabsContent>
+      <TabsContent value="day">
+        <DayScheduleView />
+      </TabsContent>
+      <TabsContent value="week">
+        <WeekScheduleView />
+      </TabsContent>
+      <TabsContent value="month">
+        <MonthScheduleView />
+      </TabsContent>
     </Tabs>
+  );
+}
+
+export default function ScheduleDashboardPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ScheduleDashboardPageContent />
+    </Suspense>
   );
 }
 
 function CalendarIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
       <path
         strokeLinecap="round"
         strokeLinejoin="round"

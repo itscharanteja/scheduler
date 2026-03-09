@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -90,7 +90,7 @@ function timeToMinutes(time: string): number {
   return h * 60 + m;
 }
 
-export default function DaySchedulePage() {
+function DaySchedulePageContent() {
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -103,7 +103,7 @@ export default function DaySchedulePage() {
   const selectedDay = dateParam ?? fallbackDay;
   const selectedDate = useMemo(
     () => new Date(`${selectedDay}T00:00:00`),
-    [selectedDay]
+    [selectedDay],
   );
 
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -146,12 +146,14 @@ export default function DaySchedulePage() {
         ]);
         if (!isActive) return;
         setEmployees(employeeRows);
-        setDayShifts(weekSchedule.shifts.filter((shift) => shift.date === selectedDay));
+        setDayShifts(
+          weekSchedule.shifts.filter((shift) => shift.date === selectedDay),
+        );
       } catch (err) {
         console.error(err);
         if (!isActive) return;
         setError(
-          err instanceof Error ? err.message : "Failed to load day schedule."
+          err instanceof Error ? err.message : "Failed to load day schedule.",
         );
       } finally {
         if (isActive) setLoading(false);
@@ -168,12 +170,16 @@ export default function DaySchedulePage() {
   }, [selectedDate]);
 
   const hourTicks = useMemo(
-    () => Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i),
-    []
+    () =>
+      Array.from(
+        { length: END_HOUR - START_HOUR + 1 },
+        (_, i) => START_HOUR + i,
+      ),
+    [],
   );
   const majorHourTicks = useMemo(
     () => hourTicks.filter((hour) => hour % 2 === 0 && hour <= 22),
-    [hourTicks]
+    [hourTicks],
   );
 
   const shiftsByEmployee = useMemo(() => {
@@ -279,7 +285,7 @@ export default function DaySchedulePage() {
         notes: editForm.notes || undefined,
       });
       setDayShifts((prev) =>
-        prev.map((shift) => (shift.id === updated.id ? updated : shift))
+        prev.map((shift) => (shift.id === updated.id ? updated : shift)),
       );
       toast.success("Shift added");
       setIsEditOpen(false);
@@ -296,16 +302,30 @@ export default function DaySchedulePage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="border-[#2a2a2a] text-[#f0f0f0]" asChild>
-            <Link href={`/dashboard/schedule/day?date=${format(prevDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(prevDay, { weekStartsOn: 1 }))}`}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-[#2a2a2a] text-[#f0f0f0]"
+            asChild
+          >
+            <Link
+              href={`/dashboard/schedule/day?date=${format(prevDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(prevDay, { weekStartsOn: 1 }))}`}
+            >
               <ChevronLeft className="h-4 w-4" />
             </Link>
           </Button>
           <div className="font-mono text-sm text-[#f0f0f0]">
             {t(DAY_KEYS[dayIndex])}, {format(selectedDate, "d MMM yyyy")}
           </div>
-          <Button variant="outline" size="sm" className="border-[#2a2a2a] text-[#f0f0f0]" asChild>
-            <Link href={`/dashboard/schedule/day?date=${format(nextDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(nextDay, { weekStartsOn: 1 }))}`}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-[#2a2a2a] text-[#f0f0f0]"
+            asChild
+          >
+            <Link
+              href={`/dashboard/schedule/day?date=${format(nextDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(nextDay, { weekStartsOn: 1 }))}`}
+            >
               <ChevronRight className="h-4 w-4" />
             </Link>
           </Button>
@@ -325,7 +345,12 @@ export default function DaySchedulePage() {
             onChange={(e) => handleDateJump(e.target.value)}
             className="h-8 w-[160px] border-[#2a2a2a] bg-[#141414] text-xs text-[#f0f0f0]"
           />
-          <Button variant="outline" size="sm" className="border-[#2a2a2a] text-[#f0f0f0]" asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-[#2a2a2a] text-[#f0f0f0]"
+            asChild
+          >
             <Link href={`/dashboard/schedule?week=${toWeekParam(weekStart)}`}>
               {t("tabs.week")}
             </Link>
@@ -346,7 +371,8 @@ export default function DaySchedulePage() {
               <div />
               <div className="relative h-8 border border-[#2a2a2a] bg-[#161616]">
                 {majorHourTicks.map((hour) => {
-                  const leftPct = ((hour - START_HOUR) / (END_HOUR - START_HOUR)) * 100;
+                  const leftPct =
+                    ((hour - START_HOUR) / (END_HOUR - START_HOUR)) * 100;
                   return (
                     <div
                       key={`tick-${hour}`}
@@ -365,7 +391,10 @@ export default function DaySchedulePage() {
             {loading ? (
               <div className="space-y-2">
                 {Array.from({ length: 7 }).map((_, idx) => (
-                  <div key={`skeleton-${idx}`} className="grid grid-cols-[220px_1fr]">
+                  <div
+                    key={`skeleton-${idx}`}
+                    className="grid grid-cols-[220px_1fr]"
+                  >
                     <div className="h-20 border border-[#2a2a2a] bg-[#151515]" />
                     <div className="h-20 border border-[#2a2a2a] bg-[#151515]" />
                   </div>
@@ -374,15 +403,23 @@ export default function DaySchedulePage() {
             ) : (
               <div className="space-y-0">
                 {employees.map((employee) => {
-                  const employeeShifts = shiftsByEmployee.get(employee.id) ?? [];
+                  const employeeShifts =
+                    shiftsByEmployee.get(employee.id) ?? [];
                   return (
-                    <div key={employee.id} className="grid grid-cols-[220px_1fr]">
+                    <div
+                      key={employee.id}
+                      className="grid grid-cols-[220px_1fr]"
+                    >
                       <div className="flex items-center border border-[#2a2a2a] bg-[#151515] px-4 py-4">
-                        <span className="truncate text-base text-[#e6e6e6]">{employee.name}</span>
+                        <span className="truncate text-base text-[#e6e6e6]">
+                          {employee.name}
+                        </span>
                       </div>
                       <div className="relative h-[82px] border border-[#2a2a2a] bg-[#141414]">
                         {majorHourTicks.map((hour) => {
-                          const leftPct = ((hour - START_HOUR) / (END_HOUR - START_HOUR)) * 100;
+                          const leftPct =
+                            ((hour - START_HOUR) / (END_HOUR - START_HOUR)) *
+                            100;
                           return (
                             <div
                               key={`grid-${employee.id}-${hour}`}
@@ -394,10 +431,19 @@ export default function DaySchedulePage() {
 
                         {employeeShifts.map((shift) => {
                           const totalMinutes = (END_HOUR - START_HOUR) * 60;
-                          const startMinutes = Math.max(timeToMinutes(shift.startTime), START_HOUR * 60);
-                          const endMinutes = Math.min(timeToMinutes(shift.endTime), END_HOUR * 60);
-                          const leftPct = ((startMinutes - START_HOUR * 60) / totalMinutes) * 100;
-                          const widthPct = ((endMinutes - startMinutes) / totalMinutes) * 100;
+                          const startMinutes = Math.max(
+                            timeToMinutes(shift.startTime),
+                            START_HOUR * 60,
+                          );
+                          const endMinutes = Math.min(
+                            timeToMinutes(shift.endTime),
+                            END_HOUR * 60,
+                          );
+                          const leftPct =
+                            ((startMinutes - START_HOUR * 60) / totalMinutes) *
+                            100;
+                          const widthPct =
+                            ((endMinutes - startMinutes) / totalMinutes) * 100;
 
                           return (
                             <div
@@ -411,9 +457,12 @@ export default function DaySchedulePage() {
                               title={t("schedule.editShift")}
                             >
                               <div className="text-xs opacity-80">
-                                {shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)}
+                                {shift.startTime.slice(0, 5)}-
+                                {shift.endTime.slice(0, 5)}
                               </div>
-                              <div className="text-base leading-tight">{shift.role}</div>
+                              <div className="text-base leading-tight">
+                                {shift.role}
+                              </div>
                             </div>
                           );
                         })}
@@ -440,8 +489,13 @@ export default function DaySchedulePage() {
 
           <div className="space-y-3">
             <div>
-              <label className="mb-1 block text-xs text-[#888]">{t("label.name")}</label>
-              <Select value={addForm.employeeId} onValueChange={handleEmployeeChange}>
+              <label className="mb-1 block text-xs text-[#888]">
+                {t("label.name")}
+              </label>
+              <Select
+                value={addForm.employeeId}
+                onValueChange={handleEmployeeChange}
+              >
                 <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                   <SelectValue placeholder={t("label.name")} />
                 </SelectTrigger>
@@ -457,18 +511,25 @@ export default function DaySchedulePage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs text-[#888]">{t("label.startTime")}</label>
+                <label className="mb-1 block text-xs text-[#888]">
+                  {t("label.startTime")}
+                </label>
                 <Input
                   type="time"
                   value={addForm.startTime}
                   onChange={(e) =>
-                    setAddForm((prev) => ({ ...prev, startTime: e.target.value }))
+                    setAddForm((prev) => ({
+                      ...prev,
+                      startTime: e.target.value,
+                    }))
                   }
                   className="border-[#2a2a2a] bg-[#0f0f0f] text-sm"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-[#888]">{t("label.endTime")}</label>
+                <label className="mb-1 block text-xs text-[#888]">
+                  {t("label.endTime")}
+                </label>
                 <Input
                   type="time"
                   value={addForm.endTime}
@@ -481,24 +542,32 @@ export default function DaySchedulePage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-[#888]">{t("label.role")}</label>
+              <label className="mb-1 block text-xs text-[#888]">
+                {t("label.role")}
+              </label>
               <Select
                 value={addForm.role}
-                onValueChange={(value) => setAddForm((prev) => ({ ...prev, role: value }))}
+                onValueChange={(value) =>
+                  setAddForm((prev) => ({ ...prev, role: value }))
+                }
               >
                 <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="border-[#2a2a2a] bg-[#141414]">
                   <SelectItem value="service">{t("role.service")}</SelectItem>
-                  <SelectItem value="shiftleader">{t("role.shiftleader")}</SelectItem>
+                  <SelectItem value="shiftleader">
+                    {t("role.shiftleader")}
+                  </SelectItem>
                   <SelectItem value="rutin">{t("role.rutin")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-[#888]">{t("label.notes")}</label>
+              <label className="mb-1 block text-xs text-[#888]">
+                {t("label.notes")}
+              </label>
               <Input
                 value={addForm.notes}
                 onChange={(e) =>
@@ -551,23 +620,33 @@ export default function DaySchedulePage() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs text-[#888]">{t("label.startTime")}</label>
+                <label className="mb-1 block text-xs text-[#888]">
+                  {t("label.startTime")}
+                </label>
                 <Input
                   type="time"
                   value={editForm.startTime}
                   onChange={(e) =>
-                    setEditForm((prev) => ({ ...prev, startTime: e.target.value }))
+                    setEditForm((prev) => ({
+                      ...prev,
+                      startTime: e.target.value,
+                    }))
                   }
                   className="border-[#2a2a2a] bg-[#0f0f0f] text-sm"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-[#888]">{t("label.endTime")}</label>
+                <label className="mb-1 block text-xs text-[#888]">
+                  {t("label.endTime")}
+                </label>
                 <Input
                   type="time"
                   value={editForm.endTime}
                   onChange={(e) =>
-                    setEditForm((prev) => ({ ...prev, endTime: e.target.value }))
+                    setEditForm((prev) => ({
+                      ...prev,
+                      endTime: e.target.value,
+                    }))
                   }
                   className="border-[#2a2a2a] bg-[#0f0f0f] text-sm"
                 />
@@ -575,24 +654,32 @@ export default function DaySchedulePage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-[#888]">{t("label.role")}</label>
+              <label className="mb-1 block text-xs text-[#888]">
+                {t("label.role")}
+              </label>
               <Select
                 value={editForm.role}
-                onValueChange={(value) => setEditForm((prev) => ({ ...prev, role: value }))}
+                onValueChange={(value) =>
+                  setEditForm((prev) => ({ ...prev, role: value }))
+                }
               >
                 <SelectTrigger className="w-full border-[#2a2a2a] bg-[#0f0f0f] text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="border-[#2a2a2a] bg-[#141414]">
                   <SelectItem value="service">{t("role.service")}</SelectItem>
-                  <SelectItem value="shiftleader">{t("role.shiftleader")}</SelectItem>
+                  <SelectItem value="shiftleader">
+                    {t("role.shiftleader")}
+                  </SelectItem>
                   <SelectItem value="rutin">{t("role.rutin")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-[#888]">{t("label.notes")}</label>
+              <label className="mb-1 block text-xs text-[#888]">
+                {t("label.notes")}
+              </label>
               <Input
                 value={editForm.notes}
                 onChange={(e) =>
@@ -628,5 +715,13 @@ export default function DaySchedulePage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function DaySchedulePage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DaySchedulePageContent />
+    </Suspense>
   );
 }
