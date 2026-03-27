@@ -15,7 +15,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { AppNotification, SettingsPayload } from "@/lib/types";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -86,7 +93,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.read).length,
-    [notifications]
+    [notifications],
   );
 
   const updateNotificationPosition = useCallback(() => {
@@ -96,7 +103,10 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
     const panelWidth = 360;
     const minRight = 12;
     const computedRight = Math.max(window.innerWidth - rect.right, minRight);
-    const maxRight = Math.max(window.innerWidth - panelWidth - minRight, minRight);
+    const maxRight = Math.max(
+      window.innerWidth - panelWidth - minRight,
+      minRight,
+    );
     const right = Math.min(computedRight, maxRight);
     const top = Math.max(rect.bottom + 10, 64);
     setNotificationPosition({ top, right });
@@ -174,12 +184,16 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
   async function fetchNotifications() {
     setNotificationsLoading(true);
     try {
-      const response = await fetch("/api/notifications?limit=12", { cache: "no-store" });
+      const response = await fetch("/api/notifications?limit=12", {
+        cache: "no-store",
+      });
       const payload = await response.json();
       if (!response.ok) {
         throw new Error("Failed to fetch notifications.");
       }
-      setNotifications(Array.isArray(payload.notifications) ? payload.notifications : []);
+      setNotifications(
+        Array.isArray(payload.notifications) ? payload.notifications : [],
+      );
     } catch (error) {
       console.error(error);
       toast.error("Failed to save — try again");
@@ -190,7 +204,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
 
   async function handleMarkAsRead(id: string) {
     setNotifications((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, read: true } : item))
+      prev.map((item) => (item.id === id ? { ...item, read: true } : item)),
     );
     try {
       await fetch("/api/notifications", {
@@ -228,7 +242,8 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive =
-                  pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  pathname === item.href ||
+                  pathname.startsWith(`${item.href}/`);
                 return (
                   <Link
                     key={item.href}
@@ -287,7 +302,9 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               aria-label="Language"
               title={lang === "en" ? "Switch to Swedish" : "Switch to English"}
             >
-              <span className="text-xs font-semibold">{lang === "en" ? "SV" : "EN"}</span>
+              <span className="text-xs font-semibold">
+                {lang === "en" ? "SV" : "EN"}
+              </span>
             </button>
           </div>
         </div>
@@ -296,7 +313,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
       <div className="pointer-events-none fixed inset-0 z-[1000]">
         <div
           ref={notificationPanelRef}
-          className={`glass-card pointer-events-auto fixed !left-auto !right-4 top-16 w-[360px] max-w-[calc(100vw-1rem)] origin-top-right p-3 transition-all duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)] will-change-transform ${
+          className={`pointer-events-auto fixed !left-250 !right-auto top-26 w-[360px] max-w-[calc(100vw-1rem)] origin-top-right p-3 transition-all duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)] will-change-transform rounded-[24px] border border-slate-200 bg-white shadow-lg ${
             notificationsOpen
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none -translate-y-[5px] scale-[0.97] opacity-0"
@@ -307,7 +324,9 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
           }}
         >
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-900">Notifications</h3>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Notifications
+            </h3>
             <button
               type="button"
               className="text-xs text-slate-600 transition-colors hover:text-slate-900"
@@ -336,7 +355,9 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
                       <div className="truncate text-xs font-semibold text-slate-900">
                         {item.title}
                       </div>
-                      <div className="mt-1 text-xs text-slate-700">{item.message}</div>
+                      <div className="mt-1 text-xs text-slate-700">
+                        {item.message}
+                      </div>
                       <div className="mt-1 text-[11px] text-slate-500">
                         {new Date(item.timestamp).toLocaleString()}
                       </div>
@@ -359,9 +380,12 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent className="glass-shift-modal max-w-xl border-none bg-transparent">
           <DialogHeader>
-            <DialogTitle className="font-mono text-slate-900">Settings</DialogTitle>
+            <DialogTitle className="font-mono text-slate-900">
+              Settings
+            </DialogTitle>
             <DialogDescription className="text-slate-600">
-              User preferences, notifications, working hours, timezone and AI behavior.
+              User preferences, notifications, working hours, timezone and AI
+              behavior.
             </DialogDescription>
           </DialogHeader>
           {settingsLoading ? (
@@ -405,28 +429,38 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs text-slate-600">Working hours start</label>
+                  <label className="mb-1 block text-xs text-slate-600">
+                    Working hours start
+                  </label>
                   <Input
                     type="time"
                     value={settings.workingHours.start}
                     onChange={(e) =>
                       setSettings((prev) => ({
                         ...prev,
-                        workingHours: { ...prev.workingHours, start: e.target.value },
+                        workingHours: {
+                          ...prev.workingHours,
+                          start: e.target.value,
+                        },
                       }))
                     }
                     className="border-white/80 bg-white/70"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-slate-600">Working hours end</label>
+                  <label className="mb-1 block text-xs text-slate-600">
+                    Working hours end
+                  </label>
                   <Input
                     type="time"
                     value={settings.workingHours.end}
                     onChange={(e) =>
                       setSettings((prev) => ({
                         ...prev,
-                        workingHours: { ...prev.workingHours, end: e.target.value },
+                        workingHours: {
+                          ...prev.workingHours,
+                          end: e.target.value,
+                        },
                       }))
                     }
                     className="border-white/80 bg-white/70"
@@ -435,10 +469,17 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs text-slate-600">Timezone</label>
+                <label className="mb-1 block text-xs text-slate-600">
+                  Timezone
+                </label>
                 <Input
                   value={settings.timezone}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, timezone: e.target.value }))}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      timezone: e.target.value,
+                    }))
+                  }
                   className="border-white/80 bg-white/70"
                 />
               </div>

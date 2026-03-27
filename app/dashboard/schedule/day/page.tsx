@@ -213,7 +213,7 @@ function DaySchedulePageContent() {
     const date = new Date(`${value}T00:00:00`);
     if (Number.isNaN(date.getTime())) return;
     const week = toWeekParam(startOfWeek(date, { weekStartsOn: 1 }));
-    router.push(`/dashboard/schedule/day?date=${value}&week=${week}`);
+    router.push(`/dashboard/schedule?tab=day&date=${value}&week=${week}`);
   }
 
   function openAddModal() {
@@ -309,7 +309,7 @@ function DaySchedulePageContent() {
             asChild
           >
             <Link
-              href={`/dashboard/schedule/day?date=${format(prevDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(prevDay, { weekStartsOn: 1 }))}`}
+              href={`/dashboard/schedule?tab=day&date=${format(prevDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(prevDay, { weekStartsOn: 1 }))}`}
             >
               <ChevronLeft className="h-4 w-4" />
             </Link>
@@ -324,7 +324,7 @@ function DaySchedulePageContent() {
             asChild
           >
             <Link
-              href={`/dashboard/schedule/day?date=${format(nextDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(nextDay, { weekStartsOn: 1 }))}`}
+              href={`/dashboard/schedule?tab=day&date=${format(nextDay, "yyyy-MM-dd")}&week=${toWeekParam(startOfWeek(nextDay, { weekStartsOn: 1 }))}`}
             >
               <ChevronRight className="h-4 w-4" />
             </Link>

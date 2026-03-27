@@ -661,11 +661,13 @@ function DayScheduleView() {
             {t("schedule.addShift")}
           </Button>
         </div>
-        <div className="overflow-x-auto rounded-2xl border border-white/75 bg-white/60">
-          <div className="min-w-[1180px]">
-            <div className="sticky top-0 z-20 mb-1 grid grid-cols-[220px_1fr] bg-white/70 backdrop-blur-md">
-              <div />
-              <div className="relative h-8 border-l border-b border-black/5 bg-white/65">
+        <div className="overflow-x-auto rounded-2xl border border-slate-300 bg-white">
+          <div className="min-w-[1200px]">
+            <div className="sticky top-0 z-20 grid grid-cols-[200px_1fr] bg-white border-b border-slate-300">
+              <div className="flex items-center px-4 py-3 border-r border-slate-300 bg-white">
+                <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Employee</span>
+              </div>
+              <div className="relative h-16 border-l border-slate-300 bg-white">
                 {hourLabels.map((hour) => {
                   const leftPct =
                     ((hour - DAY_START_HOUR) /
@@ -675,10 +677,10 @@ function DayScheduleView() {
                   return (
                     <div
                       key={`tick-${hour}`}
-                      className="absolute top-0 h-full border-l border-black/8"
+                      className="absolute top-0 h-full border-l border-slate-200"
                       style={{ left: `${leftPct}%` }}
                     >
-                      <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-mono text-slate-500">
+                      <span className="absolute top-2 left-1/2 -translate-x-1/2 text-xs font-bold text-slate-900">
                         {`${labelHour.toString().padStart(2, "0")}:00`}
                       </span>
                     </div>
@@ -688,33 +690,33 @@ function DayScheduleView() {
             </div>
 
             {loading ? (
-              <div className="space-y-2 p-2">
+              <div className="space-y-3 p-3">
                 {Array.from({ length: 6 }).map((_, idx) => (
                   <div
                     key={`skeleton-${idx}`}
-                    className="grid grid-cols-[220px_1fr]"
+                    className="grid grid-cols-[200px_1fr] gap-3"
                   >
-                    <div className="h-20 rounded-l-xl border border-black/5 bg-white/70" />
-                    <div className="h-20 rounded-r-xl border border-l-0 border-black/5 bg-white/55" />
+                    <div className="h-24 rounded-lg border border-slate-300 bg-slate-100" />
+                    <div className="h-24 rounded-lg border border-slate-300 bg-slate-50" />
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="space-y-2 p-2">
+              <div className="space-y-3 p-3">
                 {employees.map((employee) => {
                   const employeeShifts =
                     shiftsByEmployee.get(employee.id) ?? [];
                   return (
                     <div
                       key={employee.id}
-                      className="grid grid-cols-[220px_1fr]"
+                      className="grid grid-cols-[200px_1fr] gap-3"
                     >
-                      <div className="flex items-center rounded-l-xl border border-black/5 bg-white/78 px-4 py-4">
-                        <span className="truncate text-sm font-medium text-slate-800">
+                      <div className="flex items-center rounded-lg border border-slate-300 bg-white px-4 py-4 shadow-sm">
+                        <span className="truncate text-sm font-semibold text-slate-900">
                           {employee.name}
                         </span>
                       </div>
-                      <div className="relative h-[84px] rounded-r-xl border border-l-0 border-black/5 bg-white/58">
+                      <div className="relative h-24 rounded-lg border border-slate-300 bg-white shadow-sm">
                         {hourLabels.map((hour) => {
                           const leftPct =
                             ((hour - DAY_START_HOUR) /
@@ -723,7 +725,7 @@ function DayScheduleView() {
                           return (
                             <div
                               key={`grid-${employee.id}-${hour}`}
-                              className="absolute top-0 h-full border-l border-black/7"
+                              className="absolute top-0 h-full border-l border-slate-100"
                               style={{ left: `${leftPct}%` }}
                             />
                           );
@@ -755,7 +757,7 @@ function DayScheduleView() {
                           return (
                             <div
                               key={shift.id}
-                              className={`glass-shift ${roleChipClass(shift.role)} absolute top-2 h-[68px] cursor-pointer rounded-xl px-3 py-2`}
+                              className={`${roleChipClass(shift.role)} absolute top-1.5 h-20 cursor-pointer rounded-lg border-2 px-3 py-2 shadow-lg`}
                               style={{
                                 left: `${leftPct}%`,
                                 width: `${Math.max(widthPct, 8)}%`,
@@ -770,11 +772,11 @@ function DayScheduleView() {
                                 }
                               }}
                             >
-                              <div className="text-[11px] text-slate-700">
+                              <div className="text-xs font-mono font-bold">
                                 {shift.startTime.slice(0, 5)}-
                                 {shift.endTime.slice(0, 5)}
                               </div>
-                              <div className="truncate text-xs font-semibold">
+                              <div className="mt-1 truncate text-xs font-bold">
                                 {shift.role}
                               </div>
                             </div>
@@ -790,32 +792,32 @@ function DayScheduleView() {
         </div>
       </div>
 
-      <div className="glass-card p-4">
-        <h3 className="mb-3 font-mono text-xs font-medium uppercase tracking-wider text-slate-500">
+      <div className="rounded-2xl border border-slate-300 bg-white p-5">
+        <h3 className="mb-4 font-semibold text-slate-900">
           Day Summary
         </h3>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="glass-muted rounded-xl border border-white/70 p-3">
-            <div className="text-[11px] text-slate-600">Total Hours</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border border-sky-300 bg-sky-50 p-4 shadow-sm">
+            <div className="text-xs font-semibold text-slate-700">Total Hours</div>
+            <div className="mt-2 font-mono text-2xl font-bold text-sky-900">
               {daySummary.totalHours.toFixed(1)}h
             </div>
           </div>
-          <div className="glass-muted rounded-xl border border-white/70 p-3">
-            <div className="text-[11px] text-slate-600">Total Shifts</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 shadow-sm">
+            <div className="text-xs font-semibold text-slate-700">Total Shifts</div>
+            <div className="mt-2 font-mono text-2xl font-bold text-amber-900">
               {daySummary.totalShifts}
             </div>
           </div>
-          <div className="glass-muted rounded-xl border border-white/70 p-3">
-            <div className="text-[11px] text-slate-600">Active Employees</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">
+          <div className="rounded-lg border border-violet-300 bg-violet-50 p-4 shadow-sm">
+            <div className="text-xs font-semibold text-slate-700">Active Employees</div>
+            <div className="mt-2 font-mono text-2xl font-bold text-violet-900">
               {daySummary.activeEmployees}
             </div>
           </div>
-          <div className="glass-muted rounded-xl border border-white/70 p-3">
-            <div className="text-[11px] text-slate-600">Overlapping Shifts</div>
-            <div className="mt-1 font-mono text-sm text-slate-900">
+          <div className="rounded-lg border border-red-300 bg-red-50 p-4 shadow-sm">
+            <div className="text-xs font-semibold text-slate-700">Overlapping Shifts</div>
+            <div className="mt-2 font-mono text-2xl font-bold text-red-900">
               {daySummary.overlappingShifts}
             </div>
           </div>
@@ -1441,7 +1443,7 @@ function WeekScheduleView() {
                     className="glass-muted flex min-h-[56px] items-center gap-3 rounded-2xl border border-white/70 px-3 py-2"
                   >
                     <Link
-                      href={`/dashboard/schedule/day?date=${dayStr}&week=${toWeekParam(weekStart)}`}
+                      href={`/dashboard/schedule?tab=day&date=${dayStr}&week=${toWeekParam(weekStart)}`}
                       className="w-24 shrink-0 text-left font-mono text-xs text-slate-500 transition-colors hover:text-slate-800"
                     >
                       {t(DAY_KEYS[i])}
@@ -2528,15 +2530,22 @@ function MonthScheduleView() {
 function ScheduleDashboardPageContent() {
   const { t } = useLanguage();
   const searchParams = useSearchParams();
-  const defaultTab =
+  const router = useRouter();
+  const currentTab =
     searchParams.get("tab") === "day"
       ? "day"
       : searchParams.get("tab") === "week"
         ? "week"
         : "month";
 
+  const handleTabChange = (newTab: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", newTab);
+    router.push(`?${params.toString()}`);
+  };
+
   return (
-    <Tabs defaultValue={defaultTab} className="space-y-4">
+    <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-4">
       <TabsList className="mx-auto glass-chip bg-white/70 px-1">
         <TabsTrigger value="day">{t("tabs.day")}</TabsTrigger>
         <TabsTrigger value="week">{t("tabs.week")}</TabsTrigger>

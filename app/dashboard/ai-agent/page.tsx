@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useRef, useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   addDays,
@@ -14,6 +14,7 @@ import { Loader2, Sparkles, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAIAgent } from "@/hooks/use-ai-agent";
+import { getEmployees } from "@/lib/supabase";
 
 const COPY = {
   en: {
@@ -91,13 +92,13 @@ function parseWeekParam(weekParam: string | null): Date {
 function roleChipClass(role: string): string {
   switch (role) {
     case "service":
-      return "bg-sky-500/20 text-sky-300 border-sky-500/50";
+      return "bg-sky-100/80 text-sky-800 border-sky-300";
     case "shiftleader":
-      return "bg-[#e8b84b]/20 text-[#e8b84b] border-[#e8b84b]/50";
+      return "bg-amber-100/80 text-amber-900 border-amber-300";
     case "rutin":
-      return "bg-purple-500/20 text-purple-300 border-purple-500/50";
+      return "bg-violet-100/80 text-violet-800 border-violet-300";
     default:
-      return "bg-zinc-600/25 text-zinc-200 border-zinc-500/50";
+      return "bg-slate-100/80 text-slate-800 border-slate-300";
   }
 }
 
@@ -125,6 +126,24 @@ function DashboardAiAgentContent() {
     isSupabaseConfigured,
   } = useAIAgent({ weekStart });
 
+  // Note: useAIAgent loads employees internally, we'll get them from the hook's state
+  // For now, we'll use a simpler approach with useMemo to extract employee names
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [mentionPosition, setMentionPosition] = useState<{ top: number; left: number } | null>(null);
+  const [employeesList, setEmployeesList] = useState<Array<{ id: string; name: string; role: string }>>([]);
+
+  // Load employees on mount
+  useEffect(() => {
+    getEmployees()
+      .then((emps) => {
+        setEmployeesList(emps.map((e) => ({ id: e.id, name: e.name, role: e.role })));
+      })
+      .catch((err) => console.error("Failed to load employees for mentions:", err));
+  }, []);
+
   const dayDates = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart],
@@ -145,6 +164,80 @@ function DashboardAiAgentContent() {
 
   const weekLabel = `${text.week} ${getISOWeek(weekStart)} • ${format(weekStart, "d MMM")}–${format(addDays(weekStart, 6), "d MMM")}`;
 
+  // Filter employees based on mention search
+  const filteredEmployees = useMemo(() => {
+    if (!mentionSearch) return employeesList;
+    return employeesList.filter((emp) =>
+      emp.name.toLowerCase().includes(mentionSearch.toLowerCase())
+    );
+  }, [employeesList, mentionSearch]);
+
+  // Handle textarea input and detect @ mentions
+  const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setPrompt(value);
+
+    // Detect @ mention
+    const textarea = e.currentTarget;
+    const cursorPos = textarea.selectionStart;
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@");
+
+    if (lastAtIndex !== -1) {
+      const searchText = textBeforeCursor.substring(lastAtIndex + 1);
+      // Only show mentions if we just typed @ or if the text after @ contains only valid characters
+      if (/^[a-zA-Z0-9\s]*$/.test(searchText)) {
+        setMentionSearch(searchText.trim());
+        setShowMentions(true);
+
+        // Calculate position for dropdown
+        const lines = textBeforeCursor.split("\n");
+        const currentLine = lines.length - 1;
+        const lineStartPos = value.substring(0, cursorPos).lastIndexOf("\n") + 1;
+        const lineText = value.substring(lineStartPos, cursorPos);
+
+        // Approximate position (this is a rough estimate)
+        setMentionPosition({
+          top: currentLine * 24,
+          left: Math.min(lineText.length * 8, 300),
+        });
+      }
+    } else {
+      setShowMentions(false);
+      setMentionSearch("");
+    }
+  };
+
+  // Handle selecting an employee mention
+  const handleSelectEmployee = (employeeName: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const cursorPos = textarea.selectionStart;
+    const textBeforeCursor = prompt.substring(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@");
+
+    if (lastAtIndex !== -1) {
+      const newPrompt =
+        prompt.substring(0, lastAtIndex) +
+        `@${employeeName} ` +
+        prompt.substring(cursorPos);
+
+      setPrompt(newPrompt);
+      setShowMentions(false);
+      setMentionSearch("");
+
+      // Move cursor after the mention
+      setTimeout(() => {
+        if (textarea) {
+          const newPos = lastAtIndex + employeeName.length + 2;
+          textarea.setSelectionRange(newPos, newPos);
+          textarea.focus();
+        }
+      }, 0);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="ai-intelligence-border">
@@ -163,12 +256,31 @@ function DashboardAiAgentContent() {
             </div>
           )}
 
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder={text.placeholder}
-            className="h-36 w-full resize-y rounded-2xl border border-white/60 bg-white/70 p-3 text-sm text-slate-900 outline-none ring-0 placeholder:text-slate-400 focus:border-slate-400"
-          />
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={prompt}
+              onChange={handlePromptChange}
+              placeholder={text.placeholder}
+              className="h-36 w-full resize-y rounded-2xl border border-white/60 bg-white/70 p-3 text-sm text-slate-900 outline-none ring-0 placeholder:text-slate-400 focus:border-slate-400"
+            />
+
+            {showMentions && filteredEmployees.length > 0 && (
+              <div className="absolute left-3 right-3 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-300/60 bg-white/95 shadow-lg">
+                {filteredEmployees.map((employee) => (
+                  <button
+                    key={employee.id}
+                    type="button"
+                    onClick={() => handleSelectEmployee(employee.name)}
+                    className="w-full px-3 py-2 text-left text-sm text-slate-900 hover:bg-slate-100/80"
+                  >
+                    <span className="font-semibold">{employee.name}</span>
+                    <span className="ml-2 text-xs text-slate-500">({employee.role})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
             {text.examples.map((example) => (
@@ -176,7 +288,7 @@ function DashboardAiAgentContent() {
                 key={example}
                 type="button"
                 onClick={() => setPrompt(example)}
-                className="glass-chip px-3 py-1.5 text-xs text-slate-800 hover:brightness-105"
+                className="glass-chip px-3 py-1.5 text-xs text-slate-800"
               >
                 {example}
               </button>
@@ -191,7 +303,7 @@ function DashboardAiAgentContent() {
               !prompt.trim() ||
               !isSupabaseConfigured
             }
-            className="mt-4 h-10 w-full glass-button font-semibold text-slate-900 hover:brightness-105"
+            className="mt-4 h-10 w-full glass-button font-semibold text-slate-900"
           >
             {generating ? (
               <>
@@ -240,7 +352,7 @@ function DashboardAiAgentContent() {
             </Button>
             <Button
               size="sm"
-              className="glass-button bg-white/80 text-slate-900 hover:brightness-105"
+              className="glass-button bg-white/80 text-slate-900"
               onClick={applyGenerated}
               disabled={
                 applying || !result?.shifts?.length || !isSupabaseConfigured
@@ -291,31 +403,32 @@ function DashboardAiAgentContent() {
               return (
                 <div
                   key={day}
-                  className="flex min-h-[52px] items-center gap-3 rounded-lg border border-white/60 bg-white/80 px-3 py-2"
+                  className="rounded-lg border border-white/70 bg-white/85 p-3"
                 >
-                  <div className="w-24 shrink-0 font-mono text-xs text-[#888]">
-                    {text.dayNames[index]}
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-20 shrink-0 font-mono text-sm font-semibold text-slate-700">
+                      {text.dayNames[index]}
+                    </div>
+                    <div className="font-mono text-sm text-slate-600">
+                      {format(dayDates[index], "d MMM")}
+                    </div>
                   </div>
-                  <div className="w-24 shrink-0 font-mono text-sm text-[#4b5563]">
-                    {format(dayDates[index], "d MMM")}
-                  </div>
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {dayShifts.length ? (
                       dayShifts.map((shift, idx) => (
                         <div
                           key={`${shift.employeeId}-${shift.date}-${shift.startTime}-${idx}`}
-                          className={`${roleChipClass(shift.role)} flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium`}
+                          className={`${roleChipClass(shift.role)} inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold`}
                           title={`${shift.employeeName} • ${shift.role}`}
                         >
-                          <Sparkles className="h-3 w-3 shrink-0 opacity-80" />
-                          <span className="truncate">
-                            {shift.employeeName} • {shift.startTime}–
-                            {shift.endTime}
+                          <Sparkles className="h-4 w-4 shrink-0" />
+                          <span className="whitespace-nowrap">
+                            {shift.employeeName} • {shift.startTime}–{shift.endTime}
                           </span>
                         </div>
                       ))
                     ) : (
-                      <span className="text-xs text-[#666]">—</span>
+                      <span className="text-sm text-slate-500">No shifts</span>
                     )}
                   </div>
                 </div>

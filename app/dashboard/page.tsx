@@ -91,11 +91,18 @@ export default function DashboardPage() {
   }, [refreshDashboard]);
 
   const todayShifts = useMemo(
-    () =>
-      weekShifts
+    () => {
+      const employeeMap = new Map(employees.map((e) => [e.id, e.name]));
+      return weekShifts
         .filter((shift) => shift.date === todayKey)
-        .sort((a, b) => a.startTime.localeCompare(b.startTime)),
-    [todayKey, weekShifts]
+        .map((shift) => ({
+          ...shift,
+          // Fallback to employee lookup if name is missing
+          employeeName: shift.employeeName || employeeMap.get(shift.employeeId) || "—",
+        }))
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    },
+    [todayKey, weekShifts, employees]
   );
 
   const activeEmployeeCount = useMemo(() => {
