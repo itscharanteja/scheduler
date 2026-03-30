@@ -2,12 +2,14 @@ import { addDays, format } from "date-fns";
 import { NextResponse } from "next/server";
 import openai, { MODEL } from "@/lib/openai";
 import type { Employee, Shift } from "@/lib/types";
+import { getCachedWeather } from "@/lib/supabase";
 
 type GenerateScheduleOpenAIRequest = {
   prompt: string;
   weekStart: string;
   employees: Employee[];
   existingShifts: Shift[];
+  locationId?: string;
 };
 
 type GeneratedShift = {
@@ -60,6 +62,8 @@ type GenerateScheduleOpenAIResponse = {
   shifts: GeneratedShift[];
   deletions?: GeneratedDeletion[];
   summary: GeneratedSummary;
+  weatherUsed?: boolean;
+  weekStart?: string;
 };
 
 type UsageInfo = {
@@ -98,6 +102,15 @@ SHIFT TEMPLATES:
 - Evening: 14:00-22:00 (8h)
 - Short lunch: 11:00-15:00 (4h)
 - Short evening: 17:00-21:00 (4h)
+
+WEATHER AWARENESS:
+When weather forecast data is provided, always factor it into your scheduling:
+- Sunny weekend → add 2-3 extra staff
+- Hot day (>22°C) → add 1-2 extra staff, note cold drink stock
+- Rainy day → consider reducing 1 staff, note delivery packaging
+- Severe weather → reduce staffing, flag potential no-shows
+- Always mention weather impact in your explanation field
+- If no weather data provided → schedule based on historical patterns only
 
 You must respond with valid JSON only. No extra text.
 Use this exact structure:
@@ -310,7 +323,67 @@ export async function POST(req: Request) {
       );
     }
 
-    const { prompt, weekStart, employees, existingShifts } = body;
+    const { prompt, weekStart, employees, existingShifts, locationId } = body;
+
+    // Fetch weather context
+    let weatherContext = "";
+
+    if (locationId) {
+      try {
+        // Try to get cached weather first
+        let forecasts = await getCachedWeather(locationId);
+
+        // If no cached data use mock weather
+        if (!forecasts || forecasts.length === 0) {
+          const { getMockWeather } = await import("@/lib/weather");
+          const mockData = getMockWeather();
+          forecasts = mockData.map((f) => ({
+            ...f,
+            id: crypto.randomUUID(),
+            locationId,
+            fetchedAt: new Date().toISOString(),
+          }));
+        }
+
+        // Filter to only the relevant week
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+
+        const weekForecasts = forecasts.filter((f) => {
+          const d = new Date(f.forecastDate);
+          return d >= new Date(weekStart) && d <= weekEnd;
+        });
+
+        // If no forecasts for this specific week use all available forecasts
+        const relevantForecasts =
+          weekForecasts.length > 0
+            ? weekForecasts
+            : forecasts.slice(0, 7);
+
+        // Build weather context string
+        weatherContext = `GOTHENBURG WEATHER FORECAST FOR THIS WEEK:
+${relevantForecasts
+  .map(
+    (f) =>
+      `${f.day} ${f.forecastDate}: ${f.condition}, High ${f.temperatureHigh}°C / Low ${f.temperatureLow}°C, Rain probability: ${f.rainProbability}%, Wind: ${f.windSpeed}m/s
+  Staffing note: ${f.staffingSuggestion}${
+        f.inventorySuggestion
+          ? `\n  Inventory note: ${f.inventorySuggestion}`
+          : ""
+      }`,
+  )
+  .join("\n")}
+
+Use this weather data to adjust staffing recommendations. On sunny weekends add extra staff. On rainy days consider reducing staff.`;
+      } catch (error) {
+        // Weather fetch failed — continue without weather context
+        console.warn(
+          "[generate-schedule-openai] Weather context unavailable:",
+          error,
+        );
+        weatherContext = "";
+      }
+    }
 
     const weekEnd = format(addDays(new Date(weekStart), 6), "yyyy-MM-dd");
     const hoursAlreadyScheduled = buildHoursAlreadyScheduled(existingShifts);
@@ -352,7 +425,7 @@ WEEK: ${weekStart} to ${weekEnd}
 EXISTING SHIFTS:
 ${existingShiftsText}
 
-MANAGER REQUEST:
+${weatherContext ? `${weatherContext}\n\n` : ""}MANAGER REQUEST:
 ${prompt}
 `,
         },
@@ -426,6 +499,8 @@ ${prompt}
       ...parsed,
       deletions: normalizedDeletions,
       usage,
+      weatherUsed: weatherContext.length > 0,
+      weekStart,
     });
   } catch (error) {
     const statusCode = getOpenAIStatusCode(error);

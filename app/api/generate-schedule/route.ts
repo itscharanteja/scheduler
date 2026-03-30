@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server";
+import { getCachedWeather } from "@/lib/supabase";
+import {
+  anonymiseEmployees,
+  anonymiseShifts,
+  deAnonymiseResponse,
+} from "@/lib/gdpr";
+import { validateSchedule } from "@/lib/labour-law";
 
 type EmployeeInput = {
   id: string;
@@ -34,6 +41,7 @@ type RequestBody = {
   employees: EmployeeInput[];
   existingShifts: ShiftInput[];
   weekStart: string;
+  locationId?: string;
 };
 
 function detectPromptLanguage(prompt: string): "sv" | "en" {
@@ -62,10 +70,20 @@ You help managers create weekly staff schedules. You must:
 Roles available: grill, counter, manager, cashier, cleaner
 Typical shift times: Morning 07:00-15:00, Lunch 10:00-18:00, Evening 14:00-22:00, Split 11:00-15:00+17:00-21:00
 
+WEATHER AWARENESS:
+When weather forecast data is provided, always factor it into your scheduling:
+- Sunny weekend → add 2-3 extra staff
+- Hot day (>22°C) → add 1-2 extra staff, note cold drink stock
+- Rainy day → consider reducing 1 staff, note delivery packaging
+- Severe weather → reduce staffing, flag potential no-shows
+- Always mention weather impact in your explanation field
+- If no weather data provided → schedule based on historical patterns only
+
 You will receive:
 - List of employees with their roles, max hours, and current scheduled hours
 - The manager's natural language request
 - Any existing shifts for the week (with IDs)
+- Weather forecast for Gothenburg (if available)
 - If manager asks to remove/cancel someone's assigned shifts, return those shifts in deletions
 
 Respond ONLY with valid JSON in this exact format:
@@ -120,12 +138,87 @@ export async function POST(req: Request) {
       );
     }
 
+    const { locationId } = body;
+
+    // GDPR — anonymise before sending to Claude
+    const { anonymised: anonEmployees, mapping } = anonymiseEmployees(
+      body.employees,
+    );
+    const anonShifts = anonymiseShifts(
+      Array.isArray(body.existingShifts) ? body.existingShifts : [],
+      mapping,
+    );
+
+    console.log(
+      `[GDPR] Anonymised ${body.employees.length} employees. Real names never sent to Claude.`,
+    );
+
+    // Fetch weather context
+    let weatherContext = "";
+
+    if (locationId) {
+      try {
+        // Try to get cached weather first
+        let forecasts = await getCachedWeather(locationId);
+
+        // If no cached data use mock weather
+        if (!forecasts || forecasts.length === 0) {
+          const { getMockWeather } = await import("@/lib/weather");
+          const mockData = getMockWeather();
+          forecasts = mockData.map((f) => ({
+            ...f,
+            id: crypto.randomUUID(),
+            locationId,
+            fetchedAt: new Date().toISOString(),
+          }));
+        }
+
+        // Filter to only the relevant week
+        const weekEnd = new Date(body.weekStart!);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+
+        const weekForecasts = forecasts.filter((f) => {
+          const d = new Date(f.forecastDate);
+          return (
+            d >= new Date(body.weekStart!) && d <= weekEnd
+          );
+        });
+
+        // If no forecasts for this specific week use all available forecasts
+        const relevantForecasts =
+          weekForecasts.length > 0
+            ? weekForecasts
+            : forecasts.slice(0, 7);
+
+        // Build weather context string
+        weatherContext = `
+GOTHENBURG WEATHER FORECAST FOR THIS WEEK:
+${relevantForecasts
+  .map(
+    (f) =>
+      `${f.day} ${f.forecastDate}: ${f.condition}, High ${f.temperatureHigh}°C / Low ${f.temperatureLow}°C, Rain probability: ${f.rainProbability}%, Wind: ${f.windSpeed}m/s
+  Staffing note: ${f.staffingSuggestion}${
+        f.inventorySuggestion
+          ? `\n  Inventory note: ${f.inventorySuggestion}`
+          : ""
+      }`,
+  )
+  .join("\n")}
+
+Use this weather data to adjust staffing recommendations. On sunny weekends add extra staff. On rainy days consider reducing staff. Always mention weather impact in your explanation.`;
+      } catch (error) {
+        // Weather fetch failed — continue without weather context
+        console.warn("[generate-schedule] Weather context unavailable:", error);
+        weatherContext = "";
+      }
+    }
+
     const userPayload = {
       weekStart: body.weekStart,
       managerPrompt: body.prompt,
       managerLanguageHint: detectPromptLanguage(body.prompt),
-      employees: body.employees,
-      existingShifts: Array.isArray(body.existingShifts) ? body.existingShifts : [],
+      employees: anonEmployees,
+      existingShifts: anonShifts,
     };
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -143,7 +236,10 @@ export async function POST(req: Request) {
         messages: [
           {
             role: "user",
-            content: JSON.stringify(userPayload),
+            content: JSON.stringify({
+              ...userPayload,
+              weatherContext: weatherContext || "",
+            }),
           },
         ],
       }),
@@ -247,11 +343,57 @@ export async function POST(req: Request) {
           .filter((d): d is ShiftDeletion => Boolean(d))
       : [];
 
+    // GDPR — re-attach real names
+    const deAnonymised = deAnonymiseResponse(
+      {
+        explanation,
+        warnings,
+        deletions,
+        shifts,
+      },
+      mapping,
+    );
+
+    // Swedish labor law validation
+    const validation = validateSchedule(
+      deAnonymised.shifts,
+      body.employees, // use real employees with contracts
+    );
+
+    console.log(
+      `[LABOUR LAW] Validation complete. ${validation.criticalCount} critical, ${validation.warningCount} warnings.`,
+    );
+
+    // Merge validation results into response
+    const lawWarnings = validation.violations
+      .filter((v) => v.severity === "critical")
+      .map((v) => `⚠️ ${v.description}`);
+
+    const lawInsights = validation.violations
+      .filter((v) => v.severity === "warning")
+      .map((v) => `💡 ${v.description}`);
+
+    // Prepend law warnings to existing warnings
+    const mergedWarnings = [...lawWarnings, ...(deAnonymised.warnings || [])];
+
+    // Prepend law insights to existing insights
+    const mergedInsights = [...lawInsights];
+
     return NextResponse.json({
-      explanation,
-      warnings,
-      deletions,
-      shifts,
+      explanation: deAnonymised.explanation,
+      warnings: mergedWarnings,
+      insights: mergedInsights,
+      deletions: deAnonymised.deletions,
+      shifts: deAnonymised.shifts,
+      weatherUsed: weatherContext.length > 0,
+      weekStart: body.weekStart,
+      labourLaw: {
+        isValid: validation.isValid,
+        criticalCount: validation.criticalCount,
+        warningCount: validation.warningCount,
+        summary: validation.summary,
+        violations: validation.violations,
+      },
     });
   } catch (error) {
     const message =
