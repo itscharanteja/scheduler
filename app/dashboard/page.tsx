@@ -307,7 +307,7 @@ export default function DashboardPage() {
                     <div className="list-row-title">{item.title}</div>
                     <div className="list-row-copy">{item.detail}</div>
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-slate-500" suppressHydrationWarning>
                     {new Date(item.timestamp).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
