@@ -21,13 +21,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { LanguageProvider, useLanguage } from "@/context/LanguageContext";
-import {
-  getMockUnreadChatCount,
-  mockChatChannels,
-  mockEmployees,
-  mockLogs,
-} from "@/lib/mock-data";
-import type { AppNotification } from "@/lib/types";
+import { LOCATION_ID } from "@/lib/constants";
+import { getEmployees, getShiftLogs, getChannels } from "@/lib/supabase";
+import type { AppNotification, Employee } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -218,22 +214,46 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [openTaskCount, setOpenTaskCount] = useState(0);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [channelCount, setChannelCount] = useState(0);
+
   const unreadCount = notifications.filter((item) => !item.read).length;
-  const openTaskCount = mockLogs.filter((log) => log.status !== "done").length;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [emps, shiftLogs, channels] = await Promise.all([
+          getEmployees(),
+          getShiftLogs(LOCATION_ID, 50),
+          getChannels(LOCATION_ID),
+        ]);
+        setEmployees(emps);
+        setLogs(shiftLogs as any[]);
+        setOpenTaskCount((shiftLogs as any[]).filter((l) => l.status !== "done").length);
+        setUnreadChatCount((channels as any[]).reduce((sum, ch) => sum + (ch.unread_count ?? 0), 0));
+        setChannelCount(channels.length);
+      } catch (error) {
+        console.error("[app-shell] Failed to load shell data:", error);
+      }
+    })();
+  }, []);
 
   const navItems = useMemo<NavItem[]>(
     () => [
       { href: "/dashboard", label: lang === "sv" ? "Dashboard" : "Dashboard", icon: LayoutDashboard },
       { href: "/dashboard/logs", label: lang === "sv" ? "Uppgifter" : "Tasks", icon: CheckSquare, badge: openTaskCount },
       { href: "/dashboard/schedule", label: lang === "sv" ? "Schema" : "Schedule", icon: Calendar },
-      { href: "/dashboard/chat", label: lang === "sv" ? "Meddelanden" : "Messages", icon: MessageSquareMore, badge: getMockUnreadChatCount() },
+      { href: "/dashboard/chat", label: lang === "sv" ? "Meddelanden" : "Messages", icon: MessageSquareMore, badge: unreadChatCount },
       { href: "/dashboard/sales", label: lang === "sv" ? "Försäljning" : "Sales", icon: ChartNoAxesCombined },
       { href: "/dashboard/ai-agent", label: lang === "sv" ? "AI-optimering" : "AI Optimisation", icon: Bot },
       { href: "/dashboard/employees", label: lang === "sv" ? "Team" : "Team", icon: Users },
       { href: "/dashboard/reports", label: lang === "sv" ? "Rapporter" : "Reports", icon: ChartNoAxesCombined },
       { href: "/dashboard/settings", label: lang === "sv" ? "Inställningar" : "Settings", icon: Settings },
     ],
-    [lang, openTaskCount]
+    [lang, openTaskCount, unreadChatCount]
   );
 
   const primaryMobileNav = navItems.slice(0, 5);
@@ -248,7 +268,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
         href: item.href,
       }));
 
-    const employeeMatches = mockEmployees
+    const employeeMatches = employees
       .filter((employee) => employee.name.toLowerCase().includes(deferredSearch))
       .slice(0, 4)
       .map((employee) => ({
@@ -258,8 +278,8 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
         href: `/dashboard/employees/${employee.id}`,
       }));
 
-    const taskMatches = mockLogs
-      .filter((task) => task.title.toLowerCase().includes(deferredSearch))
+    const taskMatches = logs
+      .filter((task) => task.title && task.title.toLowerCase().includes(deferredSearch))
       .slice(0, 4)
       .map((task) => ({
         id: task.id,
@@ -268,18 +288,8 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
         href: "/dashboard/logs",
       }));
 
-    const channelMatches = mockChatChannels
-      .filter((channel) => channel.name.toLowerCase().includes(deferredSearch))
-      .slice(0, 3)
-      .map((channel) => ({
-        id: channel.id,
-        label: channel.name,
-        description: "Message channel",
-        href: "/dashboard/chat",
-      }));
-
-    return [...routeMatches, ...employeeMatches, ...taskMatches, ...channelMatches].slice(0, 8);
-  }, [deferredSearch, navItems]);
+    return [...routeMatches, ...employeeMatches, ...taskMatches].slice(0, 8);
+  }, [deferredSearch, employees, logs, navItems]);
 
   async function fetchNotifications() {
     setNotificationsLoading(true);
@@ -384,11 +394,11 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               </div>
               <div className="flex items-center justify-between">
                 <span>{lang === "sv" ? "Olästa meddelanden" : "Unread messages"}</span>
-                <span className="font-semibold text-slate-950">{getMockUnreadChatCount()}</span>
+                <span className="font-semibold text-slate-950">{unreadChatCount}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>{lang === "sv" ? "Kanaler live" : "Active channels"}</span>
-                <span className="font-semibold text-slate-950">{mockChatChannels.length}</span>
+                <span className="font-semibold text-slate-950">{channelCount}</span>
               </div>
             </div>
           </div>
@@ -500,7 +510,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               </div>
               <div className="toolbar-row">
                 <div className="status-chip status-neutral">
-                  {lang === "sv" ? "Olästa meddelanden" : "Unread messages"} {getMockUnreadChatCount()}
+                  {lang === "sv" ? "Olästa meddelanden" : "Unread messages"} {unreadChatCount}
                 </div>
                 <div className="status-chip status-info">
                   {lang === "sv" ? "Aktiva uppgifter" : "Active tasks"} {openTaskCount}

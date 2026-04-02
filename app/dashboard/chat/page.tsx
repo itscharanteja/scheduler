@@ -1,21 +1,70 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pin, Search, SendHorizonal } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/context/LanguageContext";
-import { mockChatChannels, mockChatMessages } from "@/lib/mock-data";
+import { LOCATION_ID } from "@/lib/constants";
+import type { ChatChannel, ChatMessage } from "@/lib/types";
 
 type DraftState = Record<string, string>;
 
 export default function ChatPage() {
   const { lang } = useLanguage();
-  const [activeChannelId, setActiveChannelId] = useState(mockChatChannels[0]?.id ?? "");
-  const [messages, setMessages] = useState(mockChatMessages);
+  const [channels, setChannels] = useState<ChatChannel[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [channelsLoading, setChannelsLoading] = useState(true);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [activeChannelId, setActiveChannelId] = useState("");
   const [query, setQuery] = useState("");
   const [drafts, setDrafts] = useState<DraftState>({});
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setChannelsLoading(true);
+        const res = await fetch(`/api/chat/channels?locationId=${LOCATION_ID}`);
+        const data = await res.json();
+        if (!active) return;
+        const chans = Array.isArray(data.channels) ? data.channels : [];
+        setChannels(chans);
+        setActiveChannelId(chans[0]?.id ?? "");
+      } catch (error) {
+        console.error(error);
+        toast.error("Could not load channels");
+      } finally {
+        if (active) setChannelsLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeChannelId) return;
+    let active = true;
+    (async () => {
+      try {
+        setMessagesLoading(true);
+        const res = await fetch(`/api/chat/messages?channelId=${activeChannelId}&limit=50`);
+        const data = await res.json();
+        if (!active) return;
+        setMessages(Array.isArray(data.messages) ? data.messages : []);
+      } catch (error) {
+        console.error(error);
+        toast.error("Could not load messages");
+      } finally {
+        if (active) setMessagesLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [activeChannelId]);
 
   const text =
     lang === "sv"
@@ -37,16 +86,19 @@ export default function ChatPage() {
         };
 
   const filteredChannels = useMemo(() => {
-    return mockChatChannels.filter((channel) => {
-      const haystack = `${channel.name} ${channel.description}`.toLowerCase();
+    return channels.filter((channel) => {
+      const haystack = `${channel.name} ${channel.description ?? ""}`.toLowerCase();
       return query.trim() ? haystack.includes(query.trim().toLowerCase()) : true;
     });
-  }, [query]);
+  }, [channels, query]);
 
-  const activeChannel =
-    filteredChannels.find((channel) => channel.id === activeChannelId) ??
-    mockChatChannels.find((channel) => channel.id === activeChannelId) ??
-    mockChatChannels[0];
+  const activeChannel = useMemo(
+    () =>
+      filteredChannels.find((channel) => channel.id === activeChannelId) ??
+      channels.find((channel) => channel.id === activeChannelId) ??
+      channels[0],
+    [activeChannelId, channels, filteredChannels]
+  );
 
   const visibleMessages = useMemo(
     () => messages.filter((message) => message.channelId === activeChannel?.id),
@@ -57,21 +109,32 @@ export default function ChatPage() {
 
   function sendMessage() {
     if (!draft.trim() || !activeChannel) return;
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `local-${Date.now()}`,
-        channelId: activeChannel.id,
-        employeeId: "local-user",
-        employeeName: lang === "sv" ? "Du" : "You",
-        employeeRole: lang === "sv" ? "Chef" : "Manager",
-        content: draft.trim(),
-        timestamp: new Date().toISOString(),
-        mine: true,
-      },
-    ]);
+    const optimistic: ChatMessage = {
+      id: `local-${Date.now()}`,
+      channelId: activeChannel.id,
+      employeeId: "local-user",
+      employeeName: lang === "sv" ? "Du" : "You",
+      employeeRole: lang === "sv" ? "Chef" : "Manager",
+      content: draft.trim(),
+      timestamp: new Date().toISOString(),
+      mine: true,
+    };
+    setMessages((prev) => [...prev, optimistic]);
     setDrafts((prev) => ({ ...prev, [activeChannel.id]: "" }));
-    toast.success(text.sent);
+    fetch("/api/chat/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        channelId: activeChannel.id,
+        senderId: "local-user",
+        message: draft.trim(),
+      }),
+    }).then(() => {
+      toast.success(text.sent);
+    }).catch((error) => {
+      console.error(error);
+      toast.error("Failed to send message");
+    });
   }
 
   const pinnedItems = [
@@ -107,7 +170,7 @@ export default function ChatPage() {
                   <div className="list-row-title">{channel.name}</div>
                   <div className="list-row-copy">{channel.description}</div>
                 </div>
-                {channel.unreadCount > 0 ? (
+                {channel.unreadCount && channel.unreadCount > 0 ? (
                   <span className="status-chip status-info">{channel.unreadCount}</span>
                 ) : null}
               </button>

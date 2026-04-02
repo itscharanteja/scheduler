@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { startOfWeek } from "date-fns";
 import { ArrowLeft, Clock3, Mail, MapPin, MessageCircleMore, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/context/LanguageContext";
-import { getLocationName, mockEmployeeActivity, mockShifts } from "@/lib/mock-data";
-import { getEmployees } from "@/lib/supabase";
-import type { Employee } from "@/lib/types";
+import { mockEmployeeActivity } from "@/lib/mock-data";
+import { getEmployees, getLocations, getShiftsByWeek } from "@/lib/supabase";
+import type { Employee, Location, Shift } from "@/lib/types";
 
 function shiftHours(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(":").map(Number);
@@ -20,15 +21,27 @@ export default function EmployeeProfilePage() {
   const { lang } = useLanguage();
   const params = useParams<{ id: string }>();
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const rows = await getEmployees();
-      if (!active) return;
-      setEmployee(rows.find((row) => row.id === params.id) ?? null);
-      setLoading(false);
+      try {
+        const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+        const [rows, locs, schedule] = await Promise.all([
+          getEmployees(),
+          getLocations(),
+          getShiftsByWeek(weekStart),
+        ]);
+        if (!active) return;
+        setEmployee(rows.find((row) => row.id === params.id) ?? null);
+        setLocations(locs);
+        setWeekShifts(schedule.shifts);
+      } finally {
+        if (active) setLoading(false);
+      }
     })();
     return () => {
       active = false;
@@ -37,11 +50,15 @@ export default function EmployeeProfilePage() {
 
   const shifts = useMemo(
     () =>
-      mockShifts
+      weekShifts
         .filter((shift) => shift.employeeId === params.id)
         .sort((a, b) => `${b.date}${b.startTime}`.localeCompare(`${a.date}${a.startTime}`)),
-    [params.id]
+    [params.id, weekShifts]
   );
+
+  const getLocationName = (locationId: string): string => {
+    return locations.find((loc) => loc.id === locationId)?.name ?? "Unknown";
+  };
 
   const activity = useMemo(
     () =>

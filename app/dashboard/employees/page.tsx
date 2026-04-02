@@ -3,18 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Clock3, MapPin, Phone, Plus, Search } from "lucide-react";
+import { startOfWeek } from "date-fns";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/context/LanguageContext";
-import { getLocationName, mockLocations, mockShifts } from "@/lib/mock-data";
 import {
   createEmployee,
   getEmployees,
+  getLocations,
+  getShiftsByWeek,
   type CreateEmployeeInput,
 } from "@/lib/supabase";
-import type { Employee } from "@/lib/types";
+import type { Employee, Location, Shift } from "@/lib/types";
 
 type FormState = {
   name: string;
@@ -39,12 +41,41 @@ function roleClass(role: string) {
 export default function EmployeesDashboardPage() {
   const { lang } = useLanguage();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+        const [emps, locs, schedule] = await Promise.all([
+          getEmployees(),
+          getLocations(),
+          getShiftsByWeek(weekStart),
+        ]);
+        if (!active) return;
+        setEmployees(emps);
+        setLocations(locs);
+        setWeekShifts(schedule.shifts);
+      } catch (error) {
+        console.error(error);
+        toast.error("Could not load employee data");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const text =
     lang === "sv"
@@ -98,8 +129,12 @@ export default function EmployeesDashboardPage() {
     };
   }, []);
 
-  const today = "2026-03-28";
-  const onShiftIds = new Set(mockShifts.filter((shift) => shift.date === today).map((shift) => shift.employeeId));
+  const today = new Date().toISOString().split("T")[0];
+  const onShiftIds = new Set(weekShifts.filter((shift) => shift.date === today).map((shift) => shift.employeeId));
+
+  const getLocationName = (locationId: string): string => {
+    return locations.find((loc) => loc.id === locationId)?.name ?? "Unknown";
+  };
 
   const filtered = useMemo(() => {
     return employees.filter((employee) => {
@@ -109,7 +144,7 @@ export default function EmployeesDashboardPage() {
         (roleFilter === "all" ? true : employee.role === roleFilter)
       );
     });
-  }, [employees, roleFilter, search]);
+  }, [employees, locations, roleFilter, search]);
 
   const summary = useMemo(() => {
     const totalHours =
@@ -133,7 +168,7 @@ export default function EmployeesDashboardPage() {
         maxWeeklyHours: Number(form.contractHours || 0) + 4,
         employmentType: "part-time",
         phone: form.phone.trim(),
-        locationId: mockLocations[0].id,
+        locationId: locations[0]?.id ?? "",
         hourlyRate: form.role === "shiftleader" ? 210 : 172,
       };
       const created = await createEmployee(payload);

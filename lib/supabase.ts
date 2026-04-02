@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Employee, Shift, WeekSchedule } from "./types";
+import type { Employee, Location, Shift, WeekSchedule, ChatChannel, ChatMessage } from "./types";
 import {
   addDays,
   endOfMonth,
@@ -55,6 +55,14 @@ type DbEmployeeRow = {
   location_id: string | null;
   hourly_rate: number | null;
   created_at: string;
+};
+
+type DbLocationRow = {
+  id: string;
+  name: string;
+  address: string;
+  city?: string | null;
+  manager_name?: string | null;
 };
 
 type DbShiftRow = {
@@ -117,6 +125,64 @@ function mapShift(row: DbShiftRow): Shift {
   };
 }
 
+function mapLocation(row: DbLocationRow): Location {
+  return {
+    id: row.id,
+    name: row.name,
+    address: row.address,
+    city: row.city ?? undefined,
+    managerName: row.manager_name ?? undefined,
+  };
+}
+
+type DbChatChannelRow = {
+  id: string;
+  location_id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  is_announcement: boolean;
+  created_at: string;
+  unread_count?: number | null;
+  participant_count?: number | null;
+};
+
+type DbChatMessageRow = {
+  id: string;
+  channel_id: string;
+  sender_id: string;
+  message: string;
+  created_at: string;
+  employees?: { name: string; role: string } | null;
+};
+
+function mapChatChannel(row: DbChatChannelRow): ChatChannel {
+  return {
+    id: row.id,
+    locationId: row.location_id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description ?? undefined,
+    isAnnouncement: row.is_announcement,
+    createdAt: row.created_at,
+    unreadCount: row.unread_count ?? undefined,
+    participantCount: row.participant_count ?? undefined,
+  };
+}
+
+function mapChatMessage(row: DbChatMessageRow): ChatMessage {
+  const employeeData = row.employees ? (Array.isArray(row.employees) ? row.employees[0] : row.employees) : null;
+  return {
+    id: row.id,
+    channelId: row.channel_id,
+    employeeId: row.sender_id,
+    employeeName: employeeData?.name ?? "Unknown",
+    employeeRole: employeeData?.role ?? "Staff",
+    content: row.message,
+    timestamp: row.created_at,
+  };
+}
+
 // Helper to ensure we have a client when called from environments where
 // NEXT_PUBLIC_SUPABASE_URL / ANON_KEY might be missing.
 function requireClient(): SupabaseClient {
@@ -144,6 +210,23 @@ export async function getEmployees(): Promise<Employee[]> {
     return (data as DbEmployeeRow[]).map(mapEmployee);
   } catch (error) {
     throw normalizeSupabaseError(error, "getEmployees");
+  }
+}
+
+export async function getLocations(): Promise<Location[]> {
+  try {
+    if (!supabaseClient) {
+      return [];
+    }
+    const { data, error } = await supabaseClient
+      .from("locations")
+      .select("*")
+      .order("name", { ascending: true });
+
+    if (error) throw error;
+    return (data as DbLocationRow[]).map(mapLocation);
+  } catch (error) {
+    throw normalizeSupabaseError(error, "getLocations");
   }
 }
 
@@ -620,5 +703,188 @@ export async function updateInventoryItem(payload: any): Promise<any | null> {
   } catch (error) {
     console.error("[supabase:updateInventoryItem]", error);
     return null;
+  }
+}
+
+// ─────────────────────────────────────────────────
+// Chat Module
+// ─────────────────────────────────────────────────
+
+export async function getChannels(locationId: string): Promise<ChatChannel[]> {
+  try {
+    if (!supabaseClient) return [];
+    const { data, error } = await supabaseClient
+      .from("chat_channels")
+      .select("*")
+      .eq("location_id", locationId);
+    if (error) throw error;
+    return (data as DbChatChannelRow[]).map(mapChatChannel);
+  } catch (error) {
+    console.error("[supabase:getChannels]", error);
+    return [];
+  }
+}
+
+export async function sendMessage(payload: {
+  channelId: string;
+  senderId: string;
+  message: string;
+}): Promise<ChatMessage | null> {
+  try {
+    const client = requireClient();
+    const { data, error } = await client
+      .from("chat_messages")
+      .insert({
+        channel_id: payload.channelId,
+        sender_id: payload.senderId,
+        message: payload.message,
+        created_at: new Date().toISOString(),
+      })
+      .select("id, channel_id, sender_id, message, created_at, employees(name, role)")
+      .single();
+    if (error) throw error;
+    return mapChatMessage(data as unknown as DbChatMessageRow);
+  } catch (error) {
+    console.error("[supabase:sendMessage]", error);
+    return null;
+  }
+}
+
+export async function getMessages(channelId: string, limit?: number): Promise<ChatMessage[]> {
+  try {
+    if (!supabaseClient) return [];
+    let query = supabaseClient
+      .from("chat_messages")
+      .select("id, channel_id, sender_id, message, created_at, employees(name, role)")
+      .eq("channel_id", channelId)
+      .order("created_at", { ascending: true });
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data as unknown as DbChatMessageRow[]).map(mapChatMessage);
+  } catch (error) {
+    console.error("[supabase:getMessages]", error);
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────
+// Shift Logs Module
+// ─────────────────────────────────────────────────
+
+export async function getShiftLogs(locationId: string, limit?: number): Promise<any[]> {
+  try {
+    if (!supabaseClient) return [];
+    let query = supabaseClient
+      .from("shift_logs")
+      .select("*")
+      .eq("location_id", locationId)
+      .order("date", { ascending: false });
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error("[supabase:getShiftLogs]", error);
+    return [];
+  }
+}
+
+export async function createShiftLog(payload: any): Promise<any | null> {
+  try {
+    const client = requireClient();
+    const { data, error } = await client
+      .from("shift_logs")
+      .insert({
+        location_id: payload.locationId,
+        date: payload.date,
+        shift_leader_id: payload.shiftLeaderId,
+        notes: payload.notes,
+        issues: payload.issues,
+        created_at: new Date().toISOString(),
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("[supabase:createShiftLog]", error);
+    return null;
+  }
+}
+
+export async function updateShiftLog(id: string, payload: any): Promise<any | null> {
+  try {
+    const client = requireClient();
+    const updatePayload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (payload.notes !== undefined) updatePayload.notes = payload.notes;
+    if (payload.issues !== undefined) updatePayload.issues = payload.issues;
+    if (payload.flagged !== undefined) updatePayload.flagged = payload.flagged;
+
+    const { data, error } = await client
+      .from("shift_logs")
+      .update(updatePayload)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("[supabase:updateShiftLog]", error);
+    return null;
+  }
+}
+
+export async function getShiftLogsByDate(
+  locationId: string,
+  date: string,
+): Promise<any[]> {
+  try {
+    if (!supabaseClient) return [];
+    const { data, error } = await supabaseClient
+      .from("shift_logs")
+      .select("*")
+      .eq("location_id", locationId)
+      .eq("date", date)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error("[supabase:getShiftLogsByDate]", error);
+    return [];
+  }
+}
+
+export async function getFlaggedLogs(locationId: string, limit?: number): Promise<any[]> {
+  try {
+    if (!supabaseClient) return [];
+    let query = supabaseClient
+      .from("shift_logs")
+      .select("*")
+      .eq("location_id", locationId)
+      .eq("flagged", true)
+      .order("created_at", { ascending: false });
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error("[supabase:getFlaggedLogs]", error);
+    return [];
   }
 }

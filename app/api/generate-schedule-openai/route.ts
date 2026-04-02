@@ -407,7 +407,7 @@ Use this weather data to adjust staffing recommendations. On sunny weekends add 
             .join("\n")
         : "None yet — build from scratch";
 
-    const response = await openai.chat.completions.create({
+    const response = await (openai as any).chat.completions.create({
       model: MODEL,
       temperature: 0.3,
       max_tokens: 1200,

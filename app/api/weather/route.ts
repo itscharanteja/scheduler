@@ -75,7 +75,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const cached = await getCachedWeather(locationId);
 
     // Check if cache is fresh
-    if (cached.length >= 7) {
+    if (cached && cached.length >= 7) {
       const oldestForecast = cached[0];
       if (!shouldRefreshCache(oldestForecast.fetchedAt)) {
         const suggestions = cached.map(mapToWeatherSuggestion);

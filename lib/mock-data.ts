@@ -489,10 +489,10 @@ export const mockInventory: InventoryItem[] = [
 ];
 
 export const mockChatChannels: ChatChannel[] = [
-  { id: "channel-ops", name: "Operations", description: "Service handoff, staffing and the live floor.", unreadCount: 3, participantCount: 12 },
-  { id: "channel-avenyn", name: "Avenyn Shift", description: "Today’s open issues and rush coordination.", unreadCount: 2, participantCount: 7 },
-  { id: "channel-kitchen", name: "Kitchen Prep", description: "Prep timing, deliveries and stock watch.", unreadCount: 1, participantCount: 5 },
-  { id: "channel-leads", name: "Shift Leaders", description: "Manager handover and escalation.", unreadCount: 0, participantCount: 4 },
+  { id: "channel-ops", locationId: "loc-hq", name: "Operations", slug: "operations", description: "Service handoff, staffing and the live floor.", isAnnouncement: false, createdAt: "2026-01-01T00:00:00Z", unreadCount: 3, participantCount: 12 },
+  { id: "channel-avenyn", locationId: "loc-hq", name: "Avenyn Shift", slug: "avenyn-shift", description: "Today’s open issues and rush coordination.", isAnnouncement: false, createdAt: "2026-01-01T00:00:00Z", unreadCount: 2, participantCount: 7 },
+  { id: "channel-kitchen", locationId: "loc-hq", name: "Kitchen Prep", slug: "kitchen-prep", description: "Prep timing, deliveries and stock watch.", isAnnouncement: false, createdAt: "2026-01-01T00:00:00Z", unreadCount: 1, participantCount: 5 },
+  { id: "channel-leads", locationId: "loc-hq", name: "Shift Leaders", slug: "shift-leaders", description: "Manager handover and escalation.", isAnnouncement: false, createdAt: "2026-01-01T00:00:00Z", unreadCount: 0, participantCount: 4 },
 ];
 
 export const mockChatMessages: ChatMessage[] = [
@@ -534,7 +534,7 @@ export const mockMorningContext = {
 };
 
 export function getMockUnreadChatCount(): number {
-  return mockChatChannels.reduce((sum, channel) => sum + channel.unreadCount, 0);
+  return mockChatChannels.reduce((sum, channel) => sum + (channel.unreadCount ?? 0), 0);
 }
 
 export function getLocationName(locationId: string): string {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { addDays, format, getISOWeek, setISOWeek, setISOWeekYear, startOfWeek } from "date-fns";
 import { Bot, CheckCircle2, Loader2, Sparkles, TriangleAlert, XCircle } from "lucide-react";
@@ -20,7 +20,7 @@ function parseWeekParam(weekParam: string | null): Date {
   return startOfWeek(weekAdjusted, { weekStartsOn: 1 });
 }
 
-export default function DashboardAiAgentPage() {
+function DashboardAiAgentContent() {
   const { lang } = useLanguage();
   const searchParams = useSearchParams();
   const weekStart = useMemo(
@@ -280,5 +280,13 @@ export default function DashboardAiAgentPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+export default function DashboardAiAgentPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DashboardAiAgentContent />
+    </Suspense>
   );
 }

@@ -15,16 +15,13 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import {
-  getMockUnreadChatCount,
-  getLocationName,
   mockAlerts,
   mockEmployeeActivity,
-  mockLogs,
   mockSales,
 } from "@/lib/mock-data";
 import { LOCATION_ID } from "@/lib/constants";
-import { getEmployees, getShiftsByWeek } from "@/lib/supabase";
-import type { Shift } from "@/lib/types";
+import { getEmployees, getShiftsByWeek, getShiftLogs, getChannels } from "@/lib/supabase";
+import type { Shift, ShiftLeaderLogEntry } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { GlassSkeleton } from "@/components/ui/glass-skeleton";
 
@@ -44,6 +41,8 @@ export default function DashboardPage() {
   const { lang } = useLanguage();
   const [employeesCount, setEmployeesCount] = useState(0);
   const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
+  const [logs, setLogs] = useState<ShiftLeaderLogEntry[]>([]);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const today = mockSales.at(-1)!;
@@ -58,13 +57,17 @@ export default function DashboardPage() {
     (async () => {
       try {
         setLoading(true);
-        const [employees, schedule] = await Promise.all([
+        const [employees, schedule, shiftLogs, channels] = await Promise.all([
           getEmployees(),
           getShiftsByWeek(weekStart, LOCATION_ID),
+          getShiftLogs(LOCATION_ID, 20),
+          getChannels(LOCATION_ID),
         ]);
         if (!active) return;
         setEmployeesCount(employees.length);
         setWeekShifts(schedule.shifts);
+        setLogs(shiftLogs as ShiftLeaderLogEntry[]);
+        setUnreadChatCount((channels as any[]).reduce((sum, ch) => sum + (ch.unread_count ?? 0), 0));
       } finally {
         if (active) setLoading(false);
       }
@@ -79,9 +82,9 @@ export default function DashboardPage() {
     [todayKey, weekShifts]
   );
 
-  const openTasks = mockLogs.filter((task) => task.status !== "done");
+  const openTasks = logs.filter((task: ShiftLeaderLogEntry) => task.status !== "done");
   const overdueTasks = openTasks.filter(
-    (task) => task.dueTime && new Date(task.dueTime).getTime() < new Date(`${todayKey}T16:00:00`).getTime()
+    (task: ShiftLeaderLogEntry) => task.dueTime && new Date(task.dueTime).getTime() < new Date(`${todayKey}T16:00:00`).getTime()
   );
   const staffOnShift = new Set(todayShifts.map((shift) => shift.employeeId)).size;
   const shiftLeaderCoverage = todayShifts.some((shift) => shift.role === "shiftleader");
@@ -186,9 +189,9 @@ export default function DashboardPage() {
     },
     {
       title: copy.messages,
-      value: `${getMockUnreadChatCount()}`,
+      value: `${unreadChatCount}`,
       note: copy.unread,
-      status: statusClass(getMockUnreadChatCount(), 2, 4),
+      status: statusClass(unreadChatCount, 2, 4),
       actionHref: "/dashboard/chat",
       actionLabel: copy.open,
       icon: MessageSquareMore,
@@ -200,7 +203,7 @@ export default function DashboardPage() {
       <section className="app-panel p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="status-chip status-neutral">{copy.store}: {getLocationName(LOCATION_ID)}</div>
+            <div className="status-chip status-neutral">{copy.store}: Skift Avenyn</div>
             <h2 className="mt-3 text-xl font-semibold text-slate-950">{copy.quickActions}</h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-600">
               {lang === "sv"

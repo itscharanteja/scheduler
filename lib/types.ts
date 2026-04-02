@@ -94,6 +94,35 @@ export interface WeatherForecastDay {
   windKph: number;
 }
 
+export type WeatherCondition = "Clear" | "Clouds" | "Rain" | "Drizzle" | "Snow" | "Thunderstorm";
+
+export interface WeatherForecast {
+  id: string;
+  locationId: string;
+  forecastDate: string;
+  day: string;
+  temperatureHigh: number;
+  temperatureLow: number;
+  condition: WeatherCondition;
+  rainProbability: number;
+  windSpeed: number;
+  uvIndex: number;
+  staffingSuggestion: string;
+  inventorySuggestion?: string;
+  fetchedAt: string;
+}
+
+export interface WeatherSuggestion {
+  date: string;
+  day: string;
+  condition: string;
+  icon: string;
+  staffingDelta: number;
+  staffingReason: string;
+  recommendedStaff: number;
+  inventoryAlerts: string[];
+}
+
 export interface SalesDay {
   id: string;
   date: string;
@@ -121,10 +150,14 @@ export interface InventoryItem {
 
 export interface ChatChannel {
   id: string;
+  locationId: string;
   name: string;
-  description: string;
-  unreadCount: number;
-  participantCount: number;
+  slug: string;
+  description?: string;
+  isAnnouncement: boolean;
+  createdAt: string;
+  unreadCount?: number;
+  participantCount?: number;
 }
 
 export interface ChatMessage {
@@ -166,4 +199,32 @@ export interface DashboardAlert {
   tone: AlertTone;
   title: string;
   message: string;
+}
+
+export type ShiftType = "morning" | "lunch" | "evening" | "full";
+
+export interface CreateShiftLogPayload {
+  locationId: string;
+  shiftLeaderId: string;
+  date: string;
+  shiftType: ShiftType;
+  notes: string;
+  issuesFlagged: boolean;
+  tasksCompleted: string[];
+  tasksPending: string[];
+}
+
+export interface ShiftLog {
+  id: string;
+  locationId: string;
+  date: string;
+  shiftLeaderId: string;
+  shiftLeaderName?: string;
+  shiftType: ShiftType;
+  notes: string;
+  issuesFlagged: boolean;
+  tasksCompleted: string[];
+  tasksPending: string[];
+  createdAt: string;
+  updatedAt?: string;
 }

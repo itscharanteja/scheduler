@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, Filter, Plus, Search, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/context/LanguageContext";
-import { mockEmployees, mockLogs } from "@/lib/mock-data";
-import type { ShiftLeaderLogEntry } from "@/lib/types";
+import { LOCATION_ID } from "@/lib/constants";
+import { getEmployees, getShiftLogs, createShiftLog, updateShiftLog } from "@/lib/supabase";
+import type { Employee, ShiftLeaderLogEntry } from "@/lib/types";
 
 type TaskStatusFilter = "all" | "open" | "delegated" | "done";
 type PriorityFilter = "all" | ShiftLeaderLogEntry["priority"];
@@ -37,15 +38,42 @@ function statusClass(status: ShiftLeaderLogEntry["status"]) {
 
 export default function LogsPage() {
   const { lang } = useLanguage();
-  const [tasks, setTasks] = useState(mockLogs);
+  const [tasks, setTasks] = useState<ShiftLeaderLogEntry[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
-  const [assigneeId, setAssigneeId] = useState(mockEmployees[0]?.id ?? "");
+  const [assigneeId, setAssigneeId] = useState("");
   const [dueTime, setDueTime] = useState("2026-03-28T17:30");
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const [logs, emps] = await Promise.all([
+          getShiftLogs(LOCATION_ID),
+          getEmployees(),
+        ]);
+        if (!active) return;
+        setTasks(logs as ShiftLeaderLogEntry[]);
+        setEmployees(emps);
+        setAssigneeId(emps[0]?.id ?? "");
+      } catch (error) {
+        console.error(error);
+        toast.error("Could not load tasks");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const text =
     lang === "sv"
@@ -138,34 +166,55 @@ export default function LogsPage() {
       )
     );
     setSelectedIds([]);
+    Promise.all(ids.map((id) => updateShiftLog(id, { status: "done" }))).catch(() => {
+      toast.error("Failed to update some tasks");
+    });
     toast.success(text.completedToast);
   }
 
   function createTask() {
     if (!title.trim()) return;
-    const assignee = mockEmployees.find((employee) => employee.id === assigneeId);
-    setTasks((prev) => [
-      {
-        id: `task-${Date.now()}`,
-        title: title.trim(),
-        note: note.trim(),
-        category: "ops",
-        priority: "medium",
-        status: "open",
-        assigneeId,
-        assigneeName: assignee?.name,
-        dueTime: new Date(dueTime).toISOString(),
-        createdAt: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
-    setTitle("");
-    setNote("");
-    toast.success(text.createdToast);
+    const assignee = employees.find((employee) => employee.id === assigneeId);
+    const payload = {
+      locationId: LOCATION_ID,
+      shiftLeaderId: assigneeId,
+      date: new Date().toISOString().split("T")[0],
+      shiftType: "morning" as const,
+      notes: `${title.trim()}${note.trim() ? ": " + note.trim() : ""}`,
+      issuesFlagged: false,
+      tasksCompleted: [],
+      tasksPending: [title.trim()],
+    };
+    createShiftLog(payload)
+      .then((created) => {
+        if (created) {
+          setTasks((prev) => [
+            {
+              id: created.id,
+              title: title.trim(),
+              note: note.trim(),
+              category: "ops",
+              priority: "medium",
+              status: "open",
+              assigneeId,
+              assigneeName: assignee?.name,
+              dueTime: new Date(dueTime).toISOString(),
+              createdAt: new Date().toISOString(),
+            },
+            ...prev,
+          ]);
+        }
+        setTitle("");
+        setNote("");
+        toast.success(text.createdToast);
+      })
+      .catch(() => {
+        toast.error("Failed to create task");
+      });
   }
 
   function updateAssignee(taskId: string, nextAssigneeId: string) {
-    const assignee = mockEmployees.find((employee) => employee.id === nextAssigneeId);
+    const assignee = employees.find((employee) => employee.id === nextAssigneeId);
     setTasks((prev) =>
       prev.map((task) =>
         task.id === taskId
@@ -178,6 +227,9 @@ export default function LogsPage() {
           : task
       )
     );
+    updateShiftLog(taskId, { assigneeId: nextAssigneeId }).catch(() => {
+      toast.error("Failed to update assignee");
+    });
   }
 
   function updateDueTime(taskId: string, nextValue: string) {
@@ -263,23 +315,24 @@ export default function LogsPage() {
             </span>
           </div>
           <div className="mt-4 grid gap-3">
-            <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={text.issue} />
-            <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder={text.note} />
+            <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={text.issue} disabled={loading} />
+            <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder={text.note} disabled={loading} />
             <div className="grid gap-3 md:grid-cols-2">
               <select
                 value={assigneeId}
                 onChange={(event) => setAssigneeId(event.target.value)}
                 className="filter-input"
+                disabled={loading}
               >
-                {mockEmployees.map((employee) => (
+                {employees.map((employee) => (
                   <option key={employee.id} value={employee.id}>
                     {employee.name}
                   </option>
                 ))}
               </select>
-              <Input type="datetime-local" value={dueTime} onChange={(event) => setDueTime(event.target.value)} />
+              <Input type="datetime-local" value={dueTime} onChange={(event) => setDueTime(event.target.value)} disabled={loading} />
             </div>
-            <Button onClick={createTask}>
+            <Button onClick={createTask} disabled={loading}>
               <Plus className="h-4 w-4" />
               {text.create}
             </Button>
@@ -357,7 +410,7 @@ export default function LogsPage() {
                         className="filter-input min-w-[180px]"
                       >
                         <option value="">{text.unassigned}</option>
-                        {mockEmployees.map((employee) => (
+                        {employees.map((employee) => (
                           <option key={employee.id} value={employee.id}>
                             {employee.name}
                           </option>

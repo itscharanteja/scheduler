@@ -61,12 +61,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return {
         id: msg.id,
         channelId: msg.channel_id,
-        senderId: msg.sender_id,
-        senderName: sender?.name,
-        senderPosition: sender?.position,
-        message: msg.message,
-        isPinned: msg.is_pinned,
-        createdAt: msg.created_at,
+        employeeId: msg.sender_id,
+        employeeName: sender?.name ?? "Unknown",
+        employeeRole: sender?.position ?? "Staff",
+        content: msg.message,
+        timestamp: msg.created_at,
       };
     });
 
