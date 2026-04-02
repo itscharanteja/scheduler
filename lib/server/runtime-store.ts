@@ -1,4 +1,5 @@
-import type { AppNotification, SettingsPayload } from "@/lib/types";
+import { mockEmployees, mockShifts } from "@/lib/mock-data";
+import type { AppNotification, Employee, SettingsPayload, Shift } from "@/lib/types";
 
 const DEFAULT_SETTINGS: SettingsPayload = {
   userPreferences: {
@@ -27,6 +28,8 @@ type RuntimeStore = {
   settings: SettingsPayload;
   notifications: AppNotification[];
   readNotificationIds: string[];
+  employees: Employee[];
+  shifts: Shift[];
 };
 
 declare global {
@@ -38,6 +41,8 @@ function initialStore(): RuntimeStore {
     settings: DEFAULT_SETTINGS,
     notifications: [],
     readNotificationIds: [],
+    employees: mockEmployees,
+    shifts: mockShifts,
   };
 }
 

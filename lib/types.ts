@@ -11,14 +11,6 @@ export interface Employee {
   locationId: string;
   createdAt: string;
   hourlyRate?: number;
-  position?: "GM" | "AM" | "SL" | "TM";
-  contractPercent?: number;
-  monthlyHours?: number;
-  monthlySalary?: number;
-  labourCostPerHour?: number;
-  bio?: string;
-  avatarUrl?: string;
-  joinedDate?: string;
 }
 
 export type ShiftStatus = "draft" | "published";
@@ -48,6 +40,8 @@ export interface Location {
   id: string;
   name: string;
   address: string;
+  city?: string;
+  managerName?: string;
 }
 
 export type SettingsPayload = {
@@ -88,196 +82,88 @@ export interface AppNotification {
   read: boolean;
 }
 
-// ─────────────────────────────────────────────────
-// Sales Module
-// ─────────────────────────────────────────────────
+export type AlertTone = "success" | "warning" | "critical" | "info";
 
-export interface Sale {
+export interface WeatherForecastDay {
+  date: string;
+  condition: "sunny" | "partly-cloudy" | "cloudy" | "rain" | "windy" | "snow";
+  summary: string;
+  tempHigh: number;
+  tempLow: number;
+  precipitationChance: number;
+  windKph: number;
+}
+
+export interface SalesDay {
   id: string;
-  locationId: string;
   date: string;
-  hour: number;
-  revenueSek: number;
-  orderCount: number;
-  createdAt: string;
+  revenue: number;
+  orders: number;
+  averageOrderValue: number;
+  laborCost: number;
+  comparisonRevenue: number;
+  peakLabel: string;
+  hourlyRevenue: number[];
 }
-
-export interface SalesSummary {
-  date: string;
-  totalRevenue: number;
-  totalOrders: number;
-  peakHour: number;
-  peakRevenue: number;
-  hourlyBreakdown: {
-    hour: number;
-    revenue: number;
-    orders: number;
-  }[];
-}
-
-export interface WeeklySalesSummary {
-  weekStart: string;
-  totalRevenue: number;
-  totalOrders: number;
-  dailyBreakdown: {
-    date: string;
-    day: string;
-    revenue: number;
-    orders: number;
-    vsLastWeek: number;
-  }[];
-  bestDay: string;
-  bestDayRevenue: number;
-  estimatedLabourCost?: number;
-}
-
-// ─────────────────────────────────────────────────
-// Inventory Module
-// ─────────────────────────────────────────────────
-
-export type InventoryStatus = "ok" | "low" | "critical";
-export type InventoryCategory =
-  | "food"
-  | "drinks"
-  | "packaging"
-  | "cleaning";
 
 export interface InventoryItem {
   id: string;
+  name: string;
+  category: string;
   locationId: string;
-  itemName: string;
-  category: InventoryCategory;
-  currentStock: number;
+  stockLevel: number;
+  threshold: number;
   unit: string;
-  lowThreshold: number;
-  criticalThreshold: number;
-  lastUpdated: string;
-  updatedBy?: string;
-  status: InventoryStatus;
-}
-
-export interface InventoryUpdatePayload {
-  id: string;
-  newStock: number;
+  status: "healthy" | "watch" | "critical";
+  updatedAt: string;
   updatedBy: string;
 }
 
-// ─────────────────────────────────────────────────
-// Shift Logs Module
-// ─────────────────────────────────────────────────
-
-export type ShiftType = "morning" | "lunch" | "evening" | "full";
-
-export interface ShiftLog {
-  id: string;
-  locationId: string;
-  shiftLeaderId: string;
-  shiftLeaderName?: string;
-  date: string;
-  shiftType: ShiftType;
-  notes: string;
-  issuesFlagged: boolean;
-  tasksCompleted: string[];
-  tasksPending: string[];
-  createdAt: string;
-}
-
-export interface CreateShiftLogPayload {
-  locationId: string;
-  shiftLeaderId: string;
-  date: string;
-  shiftType: ShiftType;
-  notes: string;
-  issuesFlagged: boolean;
-  tasksCompleted: string[];
-  tasksPending: string[];
-}
-
-// ─────────────────────────────────────────────────
-// Chat Module
-// ─────────────────────────────────────────────────
-
 export interface ChatChannel {
   id: string;
-  locationId: string;
   name: string;
-  slug: string;
-  description?: string;
-  isAnnouncement: boolean;
-  unreadCount?: number;
-  lastMessage?: string;
-  lastMessageAt?: string;
-  createdAt: string;
+  description: string;
+  unreadCount: number;
+  participantCount: number;
 }
 
 export interface ChatMessage {
   id: string;
   channelId: string;
-  senderId: string;
-  senderName?: string;
-  senderPosition?: string;
-  message: string;
-  isPinned: boolean;
-  createdAt: string;
+  employeeId: string;
+  employeeName: string;
+  employeeRole: string;
+  content: string;
+  timestamp: string;
+  mine?: boolean;
 }
 
-export interface SendMessagePayload {
-  channelId: string;
-  senderId: string;
-  message: string;
-}
-
-// ─────────────────────────────────────────────────
-// Weather Module
-// ─────────────────────────────────────────────────
-
-export type WeatherCondition =
-  | "Clear"
-  | "Clouds"
-  | "Rain"
-  | "Drizzle"
-  | "Snow"
-  | "Thunderstorm";
-
-export interface WeatherForecast {
+export interface ShiftLeaderLogEntry {
   id: string;
-  locationId: string;
-  forecastDate: string;
-  day: string;
-  temperatureHigh: number;
-  temperatureLow: number;
-  condition: WeatherCondition;
-  rainProbability: number;
-  windSpeed: number;
-  uvIndex: number;
-  staffingSuggestion: string;
-  inventorySuggestion: string;
-  fetchedAt: string;
+  title: string;
+  note: string;
+  category: "ops" | "staff" | "stock" | "guest";
+  priority: "low" | "medium" | "high";
+  status: "open" | "delegated" | "done";
+  assigneeId?: string;
+  assigneeName?: string;
+  dueTime?: string;
+  createdAt: string;
+  completedAt?: string;
 }
 
-export interface WeatherSuggestion {
-  date: string;
-  day: string;
-  condition: WeatherCondition;
-  icon: string;
-  staffingDelta: number;
-  staffingReason: string;
-  recommendedStaff: number;
-  inventoryAlerts: string[];
+export interface EmployeeActivityItem {
+  id: string;
+  employeeId: string;
+  type: "shift" | "stock" | "message" | "task" | "attendance";
+  title: string;
+  detail: string;
+  timestamp: string;
 }
 
-// ─────────────────────────────────────────────────
-// Dashboard Module
-// ─────────────────────────────────────────────────
-
-export interface DashboardSummary {
-  todayRevenue: number;
-  todayOrders: number;
-  vsYesterday: number;
-  lowStockCount: number;
-  criticalStockCount: number;
-  todayStaffCount: number;
-  flaggedLogsCount: number;
-  unreadMessagesCount: number;
-  weatherSummary?: string;
+export interface DashboardAlert {
+  id: string;
+  tone: AlertTone;
+  title: string;
+  message: string;
 }
