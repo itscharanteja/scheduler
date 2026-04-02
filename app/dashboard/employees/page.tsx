@@ -1,640 +1,299 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Clock3, MapPin, Phone, Plus, Search } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/context/LanguageContext";
+import { getLocationName, mockLocations, mockShifts } from "@/lib/mock-data";
 import {
-  getEmployees,
   createEmployee,
-  updateEmployee,
-  deleteEmployee,
-  isSupabaseConfigured,
+  getEmployees,
   type CreateEmployeeInput,
-  type UpdateEmployeeInput,
 } from "@/lib/supabase";
 import type { Employee } from "@/lib/types";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Pencil, Trash2, Plus, Loader2 } from "lucide-react";
-import { toast } from "sonner";
 
-type EmployeeFormState = {
+type FormState = {
   name: string;
   role: string;
-  employmentType: "full-time" | "part-time" | "hourly";
-  contractHours: string;
-  maxWeeklyHours: string;
-  hourlyRate: string;
   phone: string;
+  contractHours: string;
 };
 
-const emptyForm: EmployeeFormState = {
+const emptyForm: FormState = {
   name: "",
   role: "service",
-  employmentType: "full-time",
-  contractHours: "",
-  maxWeeklyHours: "",
-  hourlyRate: "",
   phone: "",
+  contractHours: "20",
 };
 
-function roleColor(role: string): string {
-  switch (role) {
-    case "service":
-      return "bg-sky-500/20 text-sky-300 border-sky-500/40";
-    case "shiftleader":
-      return "bg-[#e8b84b]/20 text-[#e8b84b] border-[#e8b84b]/50";
-    case "rutin":
-      return "bg-purple-500/20 text-purple-300 border-purple-500/40";
-    default:
-      return "bg-zinc-700/40 text-zinc-200 border-zinc-500/40";
-  }
-}
-
-function employmentColor(type: Employee["employmentType"]): string {
-  switch (type) {
-    case "full-time":
-      return "bg-emerald-500/15 text-emerald-300 border-emerald-500/40";
-    case "part-time":
-      return "bg-sky-500/15 text-sky-300 border-sky-500/40";
-    case "hourly":
-    default:
-      return "bg-purple-500/15 text-purple-300 border-purple-500/40";
-  }
+function roleClass(role: string) {
+  if (role === "shiftleader") return "status-warning";
+  if (role === "rutin") return "status-info";
+  return "status-neutral";
 }
 
 export default function EmployeesDashboardPage() {
-  const { t } = useLanguage();
+  const { lang } = useLanguage();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(emptyForm);
 
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [form, setForm] = useState<EmployeeFormState>(emptyForm);
-
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [selectedForDelete, setSelectedForDelete] = useState<Employee | null>(
-    null
-  );
+  const text =
+    lang === "sv"
+      ? {
+          search: "Sök namn, roll eller enhet",
+          add: "Lägg till person",
+          total: "Totalt i teamet",
+          onShift: "På pass idag",
+          avgHours: "Snitt kontraktstimmar",
+          now: "Jobbar nu",
+          availability: "Tillgänglighet",
+          role: "Roll",
+          create: "Skapa person",
+          cancel: "Avbryt",
+          empty: "Ingen person matchar nuvarande filter.",
+          phone: "Telefon",
+          contract: "Kontrakt",
+        }
+      : {
+          search: "Search name, role, or location",
+          add: "Add person",
+          total: "Total team members",
+          onShift: "On shift today",
+          avgHours: "Average contract hours",
+          now: "Working now",
+          availability: "Availability",
+          role: "Role",
+          create: "Create person",
+          cancel: "Cancel",
+          empty: "No team members match the current filters.",
+          phone: "Phone",
+          contract: "Contract",
+        };
 
   useEffect(() => {
-    let isActive = true;
+    let mounted = true;
     (async () => {
       try {
-        setLoading(true);
-        const data = await getEmployees();
-        if (!isActive) return;
-        setEmployees(data);
-      } catch (err) {
-        console.error(err);
-        if (!isActive) return;
-        setError(err instanceof Error ? err.message : "Failed to load employees.");
+        const rows = await getEmployees();
+        if (mounted) {
+          setEmployees(rows);
+        }
       } finally {
-        if (isActive) {
+        if (mounted) {
           setLoading(false);
         }
       }
     })();
     return () => {
-      isActive = false;
+      mounted = false;
     };
   }, []);
 
-  const stats = useMemo(() => {
-    const total = employees.length;
-    const fullTime = employees.filter(
-      (e) => e.employmentType === "full-time"
-    ).length;
-    const partTime = employees.filter(
-      (e) => e.employmentType === "part-time"
-    ).length;
-    const totalHours = employees.reduce(
-      (sum, e) => sum + (e.contractHours || 0),
-      0
-    );
-    return { total, fullTime, partTime, totalHours };
-  }, [employees]);
+  const today = "2026-03-28";
+  const onShiftIds = new Set(mockShifts.filter((shift) => shift.date === today).map((shift) => shift.employeeId));
 
-  const roleOptions: { value: string; label: string }[] = [
-    { value: "service", label: t("role.service") },
-    { value: "shiftleader", label: t("role.shiftleader") },
-    { value: "rutin", label: t("role.rutin") },
-  ];
-
-  const employmentOptions: {
-    value: Employee["employmentType"];
-    label: string;
-  }[] = [
-    { value: "full-time", label: t("employment.fullTime") },
-    { value: "part-time", label: t("employment.partTime") },
-    { value: "hourly", label: t("employment.hourly") },
-  ];
-
-  function openCreate() {
-    setEditingEmployee(null);
-    setForm(emptyForm);
-    setIsFormOpen(true);
-  }
-
-  function openEdit(emp: Employee) {
-    setEditingEmployee(emp);
-    setForm({
-      name: emp.name,
-      role: emp.role,
-      employmentType: emp.employmentType,
-      contractHours: emp.contractHours.toString(),
-      maxWeeklyHours: emp.maxWeeklyHours.toString(),
-      hourlyRate:
-        typeof emp.hourlyRate === "number" ? emp.hourlyRate.toString() : "",
-      phone: emp.phone,
+  const filtered = useMemo(() => {
+    return employees.filter((employee) => {
+      const haystack = `${employee.name} ${employee.role} ${getLocationName(employee.locationId)}`.toLowerCase();
+      return (
+        (search.trim() ? haystack.includes(search.trim().toLowerCase()) : true) &&
+        (roleFilter === "all" ? true : employee.role === roleFilter)
+      );
     });
-    setIsFormOpen(true);
-  }
+  }, [employees, roleFilter, search]);
 
-  function closeForm() {
-    setIsFormOpen(false);
-    setEditingEmployee(null);
-    setForm(emptyForm);
-  }
+  const summary = useMemo(() => {
+    const totalHours =
+      employees.length > 0
+        ? employees.reduce((sum, employee) => sum + employee.contractHours, 0) / employees.length
+        : 0;
+    return {
+      total: employees.length,
+      onShift: onShiftIds.size,
+      average: totalHours,
+    };
+  }, [employees, onShiftIds.size]);
 
-  async function handleSubmit() {
-    if (!isSupabaseConfigured) {
-      setError(t("employees.supabaseNotConfigured"));
-      return;
-    }
+  async function handleCreateEmployee() {
+    setSaving(true);
     try {
-      setSaving(true);
-      setError(null);
-
       const payload: CreateEmployeeInput = {
         name: form.name.trim(),
         role: form.role,
         contractHours: Number(form.contractHours || 0),
-        maxWeeklyHours: Number(form.maxWeeklyHours || 0),
-        employmentType: form.employmentType,
+        maxWeeklyHours: Number(form.contractHours || 0) + 4,
+        employmentType: "part-time",
         phone: form.phone.trim(),
-        hourlyRate: form.hourlyRate ? Number(form.hourlyRate) : undefined,
+        locationId: mockLocations[0].id,
+        hourlyRate: form.role === "shiftleader" ? 210 : 172,
       };
-
-      if (editingEmployee) {
-        const updated = await updateEmployee(editingEmployee.id, payload as UpdateEmployeeInput);
-        setEmployees((prev) =>
-          prev.map((e) => (e.id === updated.id ? updated : e))
-        );
-        toast.success("Employee saved");
-      } else {
-        const created = await createEmployee(payload);
-        setEmployees((prev) => [created, ...prev]);
-        toast.success("Employee saved");
-      }
-
-      closeForm();
-    } catch (err) {
-      console.error(err);
-      setError("Failed to save employee.");
-      toast.error("Failed to save — try again");
+      const created = await createEmployee(payload);
+      setEmployees((prev) => [created, ...prev]);
+      setForm(emptyForm);
+      setIsCreateOpen(false);
+      toast.success("Team member created");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not create team member");
     } finally {
       setSaving(false);
     }
   }
 
-  function openDelete(emp: Employee) {
-    setSelectedForDelete(emp);
-    setIsDeleteOpen(true);
-  }
-
-  function closeDelete() {
-    setSelectedForDelete(null);
-    setIsDeleteOpen(false);
-  }
-
-  async function handleDelete() {
-    if (!selectedForDelete) return;
-    if (!isSupabaseConfigured) {
-      setError(t("employees.supabaseNotConfigured"));
-      return;
-    }
-    try {
-      setDeleting(true);
-      setError(null);
-      await deleteEmployee(selectedForDelete.id);
-      setEmployees((prev) =>
-        prev.filter((e) => e.id !== selectedForDelete.id)
-      );
-      toast.success("Employee saved");
-      closeDelete();
-    } catch (err) {
-      console.error(err);
-      setError("Failed to delete employee.");
-      toast.error("Failed to save — try again");
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  const hasEmployees = employees.length > 0;
-
   return (
     <div className="space-y-6">
-      {!isSupabaseConfigured && (
-        <div className="glass-card px-4 py-3 text-sm text-amber-800 bg-amber-50/80 border border-amber-200">
-          {t("employees.supabaseNotConfigured")}
-        </div>
-      )}
-
-      {/* Summary stats */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap gap-4">
-          <Card className="glass-card border-none bg-transparent">
-            <CardContent className="py-3 px-4">
-              <div className="text-xs text-slate-600">
-                {t("employees.summary.total")}
-              </div>
-              <div className="mt-1 text-lg font-mono text-slate-900">
-                {stats.total}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="glass-card border-none bg-transparent">
-            <CardContent className="py-3 px-4">
-              <div className="text-xs text-slate-600">
-                {t("employees.summary.fullTime")}
-              </div>
-              <div className="mt-1 text-lg font-mono text-slate-900">
-                {stats.fullTime}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="glass-card border-none bg-transparent">
-            <CardContent className="py-3 px-4">
-              <div className="text-xs text-slate-600">
-                {t("employees.summary.partTime")}
-              </div>
-              <div className="mt-1 text-lg font-mono text-slate-900">
-                {stats.partTime}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="glass-card border-none bg-transparent">
-            <CardContent className="py-3 px-4">
-              <div className="text-xs text-slate-600">
-                {t("employees.summary.totalHours")}
-              </div>
-              <div className="mt-1 text-lg font-mono text-slate-900">
-                {stats.totalHours}h
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Button
-          size="sm"
-          className="bg-[#e8b84b] text-black hover:bg-[#f0c75c]"
-          onClick={openCreate}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {t("employees.addEmployee")}
-        </Button>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          {error}
-        </div>
-      )}
-
-      {/* Employee grid */}
-      {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Card
-              key={i}
-              className="glass-card border-none bg-transparent animate-pulse"
-            >
-              <CardHeader className="space-y-2">
-                <div className="h-4 w-32 rounded bg-slate-200/70" />
-                <div className="h-3 w-20 rounded bg-slate-200/70" />
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="h-3 w-28 rounded bg-slate-200/70" />
-                <div className="h-3 w-24 rounded bg-slate-200/70" />
-                <div className="h-3 w-40 rounded bg-slate-200/70" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : !hasEmployees ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 px-6 py-10 text-center text-sm text-slate-600">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-white/70 bg-white/80 text-2xl shadow-sm">
-            👥
+      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="app-panel p-5">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="metric-card">
+              <div className="metric-label">{text.total}</div>
+              <div className="metric-value">{summary.total}</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">{text.onShift}</div>
+              <div className="metric-value">{summary.onShift}</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">{text.avgHours}</div>
+              <div className="metric-value">{summary.average.toFixed(0)}h</div>
+            </div>
           </div>
-          <p className="text-sm text-slate-700">
-            No employees yet — add your first team member
-          </p>
         </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {employees.map((emp) => {
-            const roleLabel =
-              roleOptions.find((r) => r.value === emp.role)?.label ??
-              emp.role;
-            const employmentLabel =
-              employmentOptions.find((e) => e.value === emp.employmentType)
-                ?.label ?? emp.employmentType;
 
-            return (
-              <Card
-                key={emp.id}
-                className="glass-employee-card glass-interactive border-none bg-transparent flex flex-col justify-between"
-              >
-                <CardHeader className="space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <CardTitle className="font-mono text-base text-slate-900">
-                        {emp.name}
-                      </CardTitle>
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        <Badge
-                          variant="outline"
-                          className={roleColor(emp.role)}
-                        >
-                          {roleLabel}
-                        </Badge>
-                        <Badge
-                          variant="outline"
-                          className={employmentColor(emp.employmentType)}
-                        >
-                          {employmentLabel}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-[#888888] hover:text-[#f0f0f0]"
-                        onClick={() => openEdit(emp)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-red-400 hover:text-red-200"
-                        onClick={() => openDelete(emp)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2 text-xs text-slate-700">
-                  <div>
-                    {t("label.contractHours")}:{" "}
-                    <span className="font-mono">
-                      {emp.contractHours}h / {emp.maxWeeklyHours}h
-                    </span>{" "}
-                    {t("employees.perWeek")}
-                  </div>
-                  <div>
-                    {t("label.phone")}:{" "}
-                    <span className="font-mono">
-                      {emp.phone || "—"}
-                    </span>
-                  </div>
-                  {typeof emp.hourlyRate === "number" && (
-                    <div>
-                      {t("label.hourlyRate")}:{" "}
-                      <span className="font-mono">
-                        {emp.hourlyRate.toFixed(2)} SEK
-                      </span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Add/Edit Employee Dialog */}
-      <Dialog open={isFormOpen} onOpenChange={(open) => !open && closeForm()}>
-        <DialogContent className="glass-card border-none bg-white/80">
-          <DialogHeader>
-            <DialogTitle className="font-mono text-slate-900">
-              {editingEmployee
-                ? t("employees.editEmployee")
-                : t("employees.addEmployee")}
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-600">
-              {editingEmployee
-                ? t("employees.editEmployee")
-                : t("employees.addEmployee")}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <label className="text-xs text-slate-600">
-                {t("label.name")}
-              </label>
+        <div className="app-panel p-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="relative min-w-[240px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
-                value={form.name}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, name: e.target.value }))
-                }
-                className="border border-white/60 bg-white/70 text-sm"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={text.search}
+                className="pl-9"
               />
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-xs text-slate-600">
-                  {t("label.role")}
-                </label>
-                <Select
-                  value={form.role}
-                  onValueChange={(value) =>
-                    setForm((f) => ({ ...f, role: value }))
-                  }
-                >
-                  <SelectTrigger className="border border-white/60 bg-white/70 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border border-white/60 bg-white/80">
-                    {roleOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs text-slate-600">
-                  {t("label.employmentType")}
-                </label>
-                <Select
-                  value={form.employmentType}
-                  onValueChange={(value: Employee["employmentType"]) =>
-                    setForm((f) => ({ ...f, employmentType: value }))
-                  }
-                >
-                  <SelectTrigger className="border border-white/60 bg-white/70 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border border-white/60 bg-white/80">
-                    {employmentOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-xs text-slate-600">
-                  {t("label.contractHours")}
-                </label>
-                <Input
-                  type="number"
-                  value={form.contractHours}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, contractHours: e.target.value }))
-                  }
-                  className="border border-white/60 bg-white/70 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-600">
-                  {t("label.maxWeeklyHours")}
-                </label>
-                <Input
-                  type="number"
-                  value={form.maxWeeklyHours}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, maxWeeklyHours: e.target.value }))
-                  }
-                  className="border border-white/60 bg-white/70 text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-xs text-slate-600">
-                  {t("label.hourlyRate")}
-                </label>
-                <Input
-                  type="number"
-                  value={form.hourlyRate}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, hourlyRate: e.target.value }))
-                  }
-                  className="border border-white/60 bg-white/70 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-[#888888]">
-                  {t("label.phone")}
-                </label>
-                <Input
-                  value={form.phone}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, phone: e.target.value }))
-                  }
-                  className="bg-[#0f0f0f] border-[#2a2a2a] text-sm"
-                />
-              </div>
-            </div>
+            </label>
+            <select
+              value={roleFilter}
+              onChange={(event) => setRoleFilter(event.target.value)}
+              className="filter-input min-w-[170px]"
+            >
+              <option value="all">All roles</option>
+              <option value="service">Service</option>
+              <option value="shiftleader">Shift leader</option>
+              <option value="rutin">Rutin</option>
+            </select>
+            <Button onClick={() => setIsCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              {text.add}
+            </Button>
           </div>
+        </div>
+      </section>
 
-          <DialogFooter className="mt-2">
-            <Button
-              variant="outline"
-              size="sm"
-            className="glass-button border-none bg-white/70 text-slate-900"
-              onClick={closeForm}
-              disabled={saving}
-            >
-              {t("button.cancel")}
-            </Button>
-            <Button
-              size="sm"
-              className="glass-button bg-white/80 text-slate-900 hover:brightness-105"
-              onClick={handleSubmit}
-              disabled={saving}
-            >
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {t("button.save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete confirmation */}
-      <Dialog
-        open={isDeleteOpen}
-        onOpenChange={(open) => !open && closeDelete()}
-      >
-        <DialogContent className="glass-card border-none bg-white/80">
-          <DialogHeader>
-            <DialogTitle className="font-mono text-slate-900">
-              {t("employees.deleteEmployee")}
-            </DialogTitle>
-            <DialogDescription className="text-sm text-slate-700">
-              {t("employees.deleteConfirm")}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button
-              variant="outline"
-              size="sm"
-              className="glass-button border-none bg-white/70 text-slate-900"
-              onClick={closeDelete}
-              disabled={deleting}
-            >
-              {t("button.cancel")}
-            </Button>
-            <Button
-              size="sm"
-              className="bg-red-500 text-white hover:bg-red-600 rounded-full px-4"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      <section className="app-panel overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="ops-table min-w-[900px]">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>{text.role}</th>
+                <th>Store</th>
+                <th>{text.availability}</th>
+                <th>{text.phone}</th>
+                <th>{text.contract}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-8 text-sm text-slate-600">Loading team...</td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-600">{text.empty}</td>
+                </tr>
+              ) : (
+                filtered.map((employee) => {
+                  const workingNow = onShiftIds.has(employee.id);
+                  return (
+                    <tr key={employee.id}>
+                      <td>
+                        <div className="font-semibold text-slate-950">{employee.name}</div>
+                        <div className="mt-1 text-sm text-slate-600">{employee.employmentType}</div>
+                      </td>
+                      <td>
+                        <span className={`status-chip ${roleClass(employee.role)}`}>{employee.role}</span>
+                      </td>
+                      <td>
+                        <div className="inline-flex items-center gap-2 text-sm text-slate-700">
+                          <MapPin className="h-4 w-4 text-slate-400" />
+                          {getLocationName(employee.locationId)}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`status-chip ${workingNow ? "status-success" : "status-neutral"}`}>
+                          {workingNow ? text.now : "Off shift"}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="inline-flex items-center gap-2 text-sm text-slate-700">
+                          <Phone className="h-4 w-4 text-slate-400" />
+                          {employee.phone}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="inline-flex items-center gap-2 text-sm text-slate-700">
+                          <Clock3 className="h-4 w-4 text-slate-400" />
+                          {employee.contractHours}h / {employee.maxWeeklyHours}h
+                        </div>
+                      </td>
+                      <td>
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={`/dashboard/employees/${employee.id}`}>Open</Link>
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
-              {t("button.edit")}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{text.add}</DialogTitle>
+            <DialogDescription>Add a team member for scheduling and task assignment.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Name" />
+            <select
+              value={form.role}
+              onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}
+              className="filter-input"
+            >
+              <option value="service">Service</option>
+              <option value="shiftleader">Shift leader</option>
+              <option value="rutin">Rutin</option>
+            </select>
+            <Input value={form.phone} onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder={text.phone} />
+            <Input value={form.contractHours} onChange={(event) => setForm((prev) => ({ ...prev, contractHours: event.target.value }))} placeholder={text.contract} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>{text.cancel}</Button>
+            <Button onClick={() => void handleCreateEmployee()} disabled={saving || !form.name.trim()}>
+              {text.create}
             </Button>
           </DialogFooter>
         </DialogContent>

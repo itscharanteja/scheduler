@@ -35,10 +35,10 @@ export default function RootLayout({
           position="top-right"
           toastOptions={{
             style: {
-              background: "rgba(255,255,255,0.65)",
-              border: "1px solid rgba(255,255,255,0.45)",
-              color: "#0a0a0a",
-              backdropFilter: "blur(16px)",
+              background: "#ffffff",
+              border: "1px solid #d7dde6",
+              color: "#0f172a",
+              boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
             },
           }}
         />
