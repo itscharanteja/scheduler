@@ -14,14 +14,23 @@ import {
   Users,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import {
-  mockAlerts,
-  mockEmployeeActivity,
-  mockSales,
-} from "@/lib/mock-data";
 import { LOCATION_ID } from "@/lib/constants";
-import { getEmployees, getShiftsByWeek, getShiftLogs, getChannels } from "@/lib/supabase";
-import type { Shift, ShiftLeaderLogEntry } from "@/lib/types";
+import {
+  getEmployees,
+  getShiftsByWeek,
+  getShiftLogs,
+  getChannels,
+  getSales,
+  getAlerts,
+  getActivity,
+} from "@/lib/supabase";
+import type {
+  Shift,
+  ShiftLeaderLogEntry,
+  SalesDay,
+  DashboardAlert,
+  EmployeeActivityItem,
+} from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { GlassSkeleton } from "@/components/ui/glass-skeleton";
 
@@ -43,13 +52,15 @@ export default function DashboardPage() {
   const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
   const [logs, setLogs] = useState<ShiftLeaderLogEntry[]>([]);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [todaySales, setTodaySales] = useState<SalesDay | null>(null);
+  const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
+  const [activity, setActivity] = useState<EmployeeActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const today = mockSales.at(-1)!;
-  const todayKey = today.date;
+  const todayKey = new Date().toISOString().split("T")[0];
   const weekStart = useMemo(
     () => startOfWeek(new Date(`${todayKey}T00:00:00`), { weekStartsOn: 1 }),
-    [todayKey]
+    [todayKey],
   );
 
   useEffect(() => {
@@ -57,17 +68,36 @@ export default function DashboardPage() {
     (async () => {
       try {
         setLoading(true);
-        const [employees, schedule, shiftLogs, channels] = await Promise.all([
+        const [
+          employees,
+          schedule,
+          shiftLogs,
+          channels,
+          sales,
+          alertData,
+          activityData,
+        ] = await Promise.all([
           getEmployees(),
           getShiftsByWeek(weekStart, LOCATION_ID),
           getShiftLogs(LOCATION_ID, 20),
           getChannels(LOCATION_ID),
+          getSales(LOCATION_ID, 1),
+          getAlerts(LOCATION_ID),
+          getActivity(LOCATION_ID, 5),
         ]);
         if (!active) return;
         setEmployeesCount(employees.length);
         setWeekShifts(schedule.shifts);
         setLogs(shiftLogs as ShiftLeaderLogEntry[]);
-        setUnreadChatCount((channels as any[]).reduce((sum, ch) => sum + (ch.unread_count ?? 0), 0));
+        setUnreadChatCount(
+          (channels as any[]).reduce(
+            (sum, ch) => sum + (ch.unread_count ?? 0),
+            0,
+          ),
+        );
+        setTodaySales(sales[0] ?? null);
+        setAlerts(alertData);
+        setActivity(activityData);
       } finally {
         if (active) setLoading(false);
       }
@@ -79,24 +109,28 @@ export default function DashboardPage() {
 
   const todayShifts = useMemo(
     () => weekShifts.filter((shift) => shift.date === todayKey),
-    [todayKey, weekShifts]
+    [todayKey, weekShifts],
   );
 
-  const openTasks = logs.filter((task: ShiftLeaderLogEntry) => task.status !== "done");
-  const overdueTasks = openTasks.filter(
-    (task: ShiftLeaderLogEntry) => task.dueTime && new Date(task.dueTime).getTime() < new Date(`${todayKey}T16:00:00`).getTime()
+  const openTasks = logs.filter(
+    (task: ShiftLeaderLogEntry) => task.status !== "done",
   );
-  const staffOnShift = new Set(todayShifts.map((shift) => shift.employeeId)).size;
-  const shiftLeaderCoverage = todayShifts.some((shift) => shift.role === "shiftleader");
+  const overdueTasks = openTasks.filter(
+    (task: ShiftLeaderLogEntry) =>
+      task.dueTime &&
+      new Date(task.dueTime).getTime() <
+        new Date(`${todayKey}T16:00:00`).getTime(),
+  );
+  const staffOnShift = new Set(todayShifts.map((shift) => shift.employeeId))
+    .size;
+  const shiftLeaderCoverage = todayShifts.some(
+    (shift) => shift.role === "shiftleader",
+  );
   const totalHours = todayShifts.reduce(
     (sum, shift) => sum + shiftHours(shift.startTime, shift.endTime),
-    0
+    0,
   );
   const coverageGaps = Math.max(0, 6 - staffOnShift);
-  const recentActivity = mockEmployeeActivity
-    .slice()
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    .slice(0, 5);
 
   const copy =
     lang === "sv"
@@ -125,7 +159,9 @@ export default function DashboardPage() {
           dueNow: "Förfaller nu",
           unread: "Olästa uppdateringar",
           suggestion: "AI ser hög trycknivå 18:00–20:00",
-          suggestionBody: "Lägg till en extra serviceperson för att minska köbildning och hålla leveranstider.",
+          suggestionBody:
+            "Lägg till en extra serviceperson för att minska köbildning och hålla leveranstider.",
+          noSales: "Ingen försäljningsdata idag",
         }
       : {
           sales: "Sales today",
@@ -152,20 +188,26 @@ export default function DashboardPage() {
           dueNow: "Due now",
           unread: "Unread updates",
           suggestion: "AI sees pressure from 18:00-20:00",
-          suggestionBody: "Add one more service teammate to reduce queue time and protect delivery speed.",
+          suggestionBody:
+            "Add one more service teammate to reduce queue time and protect delivery speed.",
+          noSales: "No sales data for today",
         };
 
   const cards = [
     {
       title: copy.sales,
-      value: new Intl.NumberFormat("sv-SE", {
-        style: "currency",
-        currency: "SEK",
-        maximumFractionDigits: 0,
-      }).format(today.revenue),
-      note: `${today.orders} orders • ${today.peakLabel}`,
+      value: todaySales
+        ? new Intl.NumberFormat("sv-SE", {
+            style: "currency",
+            currency: "SEK",
+            maximumFractionDigits: 0,
+          }).format(todaySales.revenue)
+        : "—",
+      note: todaySales
+        ? `${todaySales.orders} orders • ${todaySales.peakLabel}`
+        : copy.noSales,
       status: "status-success",
-      actionHref: "/dashboard/sales",
+      actionHref: "/sales",
       actionLabel: copy.open,
       icon: TrendingUp,
     },
@@ -174,7 +216,7 @@ export default function DashboardPage() {
       value: `${staffOnShift}/${Math.max(employeesCount, staffOnShift)}`,
       note: shiftLeaderCoverage ? copy.leaderReady : copy.noLeader,
       status: shiftLeaderCoverage ? "status-success" : "status-danger",
-      actionHref: "/dashboard/employees",
+      actionHref: "/employees",
       actionLabel: copy.open,
       icon: Users,
     },
@@ -183,7 +225,7 @@ export default function DashboardPage() {
       value: `${openTasks.length}`,
       note: `${overdueTasks.length} ${copy.dueNow}`,
       status: statusClass(overdueTasks.length, 1, 2),
-      actionHref: "/dashboard/logs",
+      actionHref: "/logs",
       actionLabel: copy.review,
       icon: CheckSquare,
     },
@@ -192,7 +234,7 @@ export default function DashboardPage() {
       value: `${unreadChatCount}`,
       note: copy.unread,
       status: statusClass(unreadChatCount, 2, 4),
-      actionHref: "/dashboard/chat",
+      actionHref: "/chat",
       actionLabel: copy.open,
       icon: MessageSquareMore,
     },
@@ -203,8 +245,12 @@ export default function DashboardPage() {
       <section className="app-panel p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="status-chip status-neutral">{copy.store}: Skift Avenyn</div>
-            <h2 className="mt-3 text-xl font-semibold text-slate-950">{copy.quickActions}</h2>
+            <div className="status-chip status-neutral">
+              {copy.store}: {copy.store}
+            </div>
+            <h2 className="mt-3 text-xl font-semibold text-slate-950">
+              {copy.quickActions}
+            </h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-600">
               {lang === "sv"
                 ? "Få fram rätt åtgärd direkt. Lägg till pass, skapa uppgift eller svara på operativa meddelanden utan omvägar."
@@ -213,16 +259,16 @@ export default function DashboardPage() {
           </div>
           <div className="toolbar-row">
             <Button asChild>
-              <Link href="/dashboard/schedule?tab=day">
+              <Link href="/schedule?tab=day">
                 <Plus className="h-4 w-4" />
                 {copy.addShift}
               </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/dashboard/logs">{copy.assignTask}</Link>
+              <Link href="/logs">{copy.assignTask}</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/dashboard/chat">{copy.sendMessage}</Link>
+              <Link href="/chat">{copy.sendMessage}</Link>
             </Button>
           </div>
         </div>
@@ -230,7 +276,9 @@ export default function DashboardPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {loading
-          ? Array.from({ length: 4 }).map((_, index) => <GlassSkeleton key={index} className="h-40" />)
+          ? Array.from({ length: 4 }).map((_, index) => (
+              <GlassSkeleton key={index} className="h-40" />
+            ))
           : cards.map((card) => {
               const Icon = card.icon;
               return (
@@ -244,7 +292,12 @@ export default function DashboardPage() {
                   <div className="metric-value">{card.value}</div>
                   <div className="metric-note">{card.note}</div>
                   <div className="mt-4">
-                    <Button asChild size="sm" variant="outline" className="w-full justify-between">
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="w-full justify-between"
+                    >
                       <Link href={card.actionHref}>
                         {card.actionLabel}
                         <ChevronRight className="h-4 w-4" />
@@ -262,14 +315,17 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="section-title">{copy.alerts}</h3>
-                <p className="section-copy">{copy.staffing}: {staffOnShift} people scheduled, {totalHours.toFixed(1)}h {copy.labour.toLowerCase()}.</p>
+                <p className="section-copy">
+                  {copy.staffing}: {staffOnShift} people scheduled,{" "}
+                  {totalHours.toFixed(1)}h {copy.labour.toLowerCase()}.
+                </p>
               </div>
               <Button asChild variant="outline" size="sm">
-                <Link href="/dashboard/schedule">{copy.viewAll}</Link>
+                <Link href="/schedule">{copy.viewAll}</Link>
               </Button>
             </div>
             <div className="mt-4 list-block">
-              {mockAlerts.slice(0, 3).map((alert) => (
+              {alerts.slice(0, 3).map((alert) => (
                 <div
                   key={alert.id}
                   className={`list-row ${alert.tone === "critical" ? "surface-danger" : alert.tone === "warning" ? "surface-warning" : "surface-info"}`}
@@ -282,7 +338,7 @@ export default function DashboardPage() {
                     <div className="list-row-copy">{alert.message}</div>
                   </div>
                   <Button asChild size="sm" variant="outline">
-                    <Link href="/dashboard/logs">{copy.review}</Link>
+                    <Link href="/logs">{copy.review}</Link>
                   </Button>
                 </div>
               ))}
@@ -300,17 +356,20 @@ export default function DashboardPage() {
                 </p>
               </div>
               <Button asChild variant="outline" size="sm">
-                <Link href="/dashboard/employees">{copy.viewAll}</Link>
+                <Link href="/employees">{copy.viewAll}</Link>
               </Button>
             </div>
             <div className="mt-4 list-block">
-              {recentActivity.map((item) => (
+              {activity.map((item) => (
                 <div key={item.id} className="list-row">
                   <div className="list-row-main">
                     <div className="list-row-title">{item.title}</div>
                     <div className="list-row-copy">{item.detail}</div>
                   </div>
-                  <div className="text-xs text-slate-500" suppressHydrationWarning>
+                  <div
+                    className="text-xs text-slate-500"
+                    suppressHydrationWarning
+                  >
                     {new Date(item.timestamp).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
@@ -318,6 +377,11 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
+              {activity.length === 0 && !loading && (
+                <div className="px-4 py-6 text-center text-sm text-slate-500">
+                  {lang === "sv" ? "Ingen aktivitet ännu." : "No activity yet."}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -334,19 +398,22 @@ export default function DashboardPage() {
                 </p>
               </div>
               <span className="status-chip status-info">
-                <Bot className="h-3.5 w-3.5" />
-                1
+                <Bot className="h-3.5 w-3.5" />1
               </span>
             </div>
             <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
-              <div className="text-sm font-semibold text-slate-950">{copy.suggestion}</div>
-              <div className="mt-2 text-sm text-slate-700">{copy.suggestionBody}</div>
+              <div className="text-sm font-semibold text-slate-950">
+                {copy.suggestion}
+              </div>
+              <div className="mt-2 text-sm text-slate-700">
+                {copy.suggestionBody}
+              </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 <Button asChild size="sm">
-                  <Link href="/dashboard/ai-agent">{copy.approve}</Link>
+                  <Link href="/ai-agent">{copy.approve}</Link>
                 </Button>
                 <Button asChild size="sm" variant="outline">
-                  <Link href="/dashboard/ai-agent">{copy.review}</Link>
+                  <Link href="/ai-agent">{copy.review}</Link>
                 </Button>
               </div>
             </div>
@@ -359,10 +426,12 @@ export default function DashboardPage() {
                 <p className="section-copy">
                   {lang === "sv"
                     ? "Fokusera på dagens luckor innan passet blir stressigt."
-                    : "Focus on today’s gaps before the shift gets busy."}
+                    : "Focus on today's gaps before the shift gets busy."}
                 </p>
               </div>
-              <span className={`status-chip ${coverageGaps > 0 ? "status-warning" : "status-success"}`}>
+              <span
+                className={`status-chip ${coverageGaps > 0 ? "status-warning" : "status-success"}`}
+              >
                 {coverageGaps}
               </span>
             </div>
@@ -373,7 +442,12 @@ export default function DashboardPage() {
                   <div key={index} className="list-row">
                     <div className="list-row-main">
                       <div className="list-row-title">
-                        {format(slot, "EEE d MMM")} • {index === 0 ? "18:00-20:00" : index === 1 ? "11:00-13:00" : "20:00-22:00"}
+                        {format(slot, "EEE d MMM")} •{" "}
+                        {index === 0
+                          ? "18:00-20:00"
+                          : index === 1
+                            ? "11:00-13:00"
+                            : "20:00-22:00"}
                       </div>
                       <div className="list-row-copy">
                         {index === 0
@@ -385,7 +459,9 @@ export default function DashboardPage() {
                             : "Coverage looks stable but should be watched."}
                       </div>
                     </div>
-                    <span className={`status-chip ${index === 0 ? "status-danger" : "status-neutral"}`}>
+                    <span
+                      className={`status-chip ${index === 0 ? "status-danger" : "status-neutral"}`}
+                    >
                       {index === 0 ? "Urgent" : "Watch"}
                     </span>
                   </div>

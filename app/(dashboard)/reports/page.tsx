@@ -1,10 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { mockLogs, mockSales, mockShifts } from "@/lib/mock-data";
+import { GlassSkeleton } from "@/components/ui/glass-skeleton";
+import { LOCATION_ID } from "@/lib/constants";
+import { getSales, getShiftLogs, getShiftsByWeek } from "@/lib/supabase";
+import { startOfWeek } from "date-fns";
+import type { SalesDay, Shift } from "@/lib/types";
 
 function shiftHours(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(":").map(Number);
@@ -12,21 +16,70 @@ function shiftHours(startTime: string, endTime: string): number {
   return (eh * 60 + em - (sh * 60 + sm)) / 60;
 }
 
+function currency(value: number) {
+  return new Intl.NumberFormat("sv-SE", {
+    style: "currency",
+    currency: "SEK",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 export default function ReportsPage() {
   const [range, setRange] = useState("week");
+  const [sales, setSales] = useState<SalesDay[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [completedTasks, setCompletedTasks] = useState(0);
+  const [totalTasks, setTotalTasks] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+        const [salesData, logsData, scheduleData] = await Promise.all([
+          getSales(LOCATION_ID, 7),
+          getShiftLogs(LOCATION_ID, 100),
+          getShiftsByWeek(weekStart, LOCATION_ID),
+        ]);
+        if (!active) return;
+        setSales([...salesData].reverse());
+        setShifts(scheduleData.shifts);
+        const logs = logsData as any[];
+        setCompletedTasks(logs.filter((l) => l.status === "done").length);
+        setTotalTasks(logs.length);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
   const report = useMemo(() => {
-    const totalHours = mockShifts.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0);
-    const completedTasks = mockLogs.filter((task) => task.status === "done").length;
-    const taskCompletionRate = (completedTasks / mockLogs.length) * 100;
-    const totalRevenue = mockSales.reduce((sum, day) => sum + day.revenue, 0);
-    return {
-      totalHours,
-      taskCompletionRate,
-      totalRevenue,
-      aiDrafts: mockShifts.filter((shift) => shift.createdByAi).length,
-    };
-  }, []);
+    const totalHours = shifts.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0);
+    const taskCompletionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+    const totalRevenue = sales.reduce((sum, day) => sum + day.revenue, 0);
+    const aiDrafts = shifts.filter((shift) => shift.createdByAi).length;
+    const shiftLeaderDays = new Set(
+      shifts.filter((s) => s.role === "shiftleader").map((s) => s.date)
+    ).size;
+    return { totalHours, taskCompletionRate, totalRevenue, aiDrafts, shiftLeaderDays };
+  }, [shifts, sales, completedTasks, totalTasks]);
+
+  const displaySales = range === "week" ? sales.slice(-7) : sales;
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <GlassSkeleton className="h-32" />
+        <div className="grid gap-4 xl:grid-cols-2">
+          <GlassSkeleton className="h-64" />
+          <GlassSkeleton className="h-64" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -56,7 +109,7 @@ export default function ReportsPage() {
           </div>
           <div className="metric-card">
             <div className="metric-label">Sales total</div>
-            <div className="metric-value">{new Intl.NumberFormat("sv-SE", { style: "currency", currency: "SEK", maximumFractionDigits: 0 }).format(report.totalRevenue)}</div>
+            <div className="metric-value">{currency(report.totalRevenue)}</div>
           </div>
           <div className="metric-card">
             <div className="metric-label">AI draft shifts</div>
@@ -82,15 +135,23 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {mockSales.map((day) => (
-                  <tr key={day.id}>
-                    <td>{day.date}</td>
-                    <td>{new Intl.NumberFormat("sv-SE", { style: "currency", currency: "SEK", maximumFractionDigits: 0 }).format(day.revenue)}</td>
-                    <td>{day.orders}</td>
-                    <td>{((day.laborCost / day.revenue) * 100).toFixed(1)}%</td>
-                    <td>{day.peakLabel}</td>
+                {displaySales.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-500">
+                      No sales data for this period.
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  displaySales.map((day) => (
+                    <tr key={day.id}>
+                      <td>{day.date}</td>
+                      <td>{currency(day.revenue)}</td>
+                      <td>{day.orders}</td>
+                      <td>{day.revenue > 0 ? ((day.laborCost / day.revenue) * 100).toFixed(1) : "—"}%</td>
+                      <td>{day.peakLabel}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -111,15 +172,15 @@ export default function ReportsPage() {
                 <div className="list-row-title">Completed tasks</div>
                 <div className="list-row-copy">Visible follow-through across delegated operational work.</div>
               </div>
-              <span className="status-chip status-success">{mockLogs.filter((task) => task.status === "done").length}</span>
+              <span className="status-chip status-success">{completedTasks}</span>
             </div>
             <div className="list-row">
               <div className="list-row-main">
                 <div className="list-row-title">Coverage quality</div>
                 <div className="list-row-copy">Review understaffed days and compare with sales pressure.</div>
               </div>
-              <span className="status-chip status-warning">
-                {mockShifts.filter((shift) => shift.role === "shiftleader").length < 7 ? "Needs review" : "Healthy"}
+              <span className={`status-chip ${report.shiftLeaderDays >= 5 ? "status-success" : "status-warning"}`}>
+                {report.shiftLeaderDays >= 5 ? "Healthy" : "Needs review"}
               </span>
             </div>
           </div>

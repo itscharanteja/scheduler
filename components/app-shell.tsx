@@ -62,31 +62,31 @@ function getPageMeta(pathname: string, lang: "en" | "sv") {
           profile: ["Team Member", "Quick context on shifts, recent activity, and contact details."],
         };
 
-  if (pathname.startsWith("/dashboard/employees/")) {
+  if (pathname.startsWith("/employees/")) {
     return { title: copy.profile[0], subtitle: copy.profile[1] };
   }
-  if (pathname.startsWith("/dashboard/logs")) {
+  if (pathname.startsWith("/logs")) {
     return { title: copy.tasks[0], subtitle: copy.tasks[1] };
   }
-  if (pathname.startsWith("/dashboard/chat")) {
+  if (pathname.startsWith("/chat")) {
     return { title: copy.messages[0], subtitle: copy.messages[1] };
   }
-  if (pathname.startsWith("/dashboard/sales")) {
+  if (pathname.startsWith("/sales")) {
     return { title: copy.sales[0], subtitle: copy.sales[1] };
   }
-  if (pathname.startsWith("/dashboard/ai-agent")) {
+  if (pathname.startsWith("/ai-agent")) {
     return { title: copy.ai[0], subtitle: copy.ai[1] };
   }
-  if (pathname.startsWith("/dashboard/employees")) {
+  if (pathname.startsWith("/employees")) {
     return { title: copy.team[0], subtitle: copy.team[1] };
   }
-  if (pathname.startsWith("/dashboard/schedule")) {
+  if (pathname.startsWith("/schedule")) {
     return { title: copy.schedule[0], subtitle: copy.schedule[1] };
   }
-  if (pathname.startsWith("/dashboard/reports")) {
+  if (pathname.startsWith("/reports")) {
     return { title: copy.reports[0], subtitle: copy.reports[1] };
   }
-  if (pathname.startsWith("/dashboard/settings")) {
+  if (pathname.startsWith("/settings")) {
     return { title: copy.settings[0], subtitle: copy.settings[1] };
   }
   return { title: copy.dashboard[0], subtitle: copy.dashboard[1] };
@@ -243,15 +243,15 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
 
   const navItems = useMemo<NavItem[]>(
     () => [
-      { href: "/dashboard", label: lang === "sv" ? "Dashboard" : "Dashboard", icon: LayoutDashboard },
-      { href: "/dashboard/logs", label: lang === "sv" ? "Uppgifter" : "Tasks", icon: CheckSquare, badge: openTaskCount },
-      { href: "/dashboard/schedule", label: lang === "sv" ? "Schema" : "Schedule", icon: Calendar },
-      { href: "/dashboard/chat", label: lang === "sv" ? "Meddelanden" : "Messages", icon: MessageSquareMore, badge: unreadChatCount },
-      { href: "/dashboard/sales", label: lang === "sv" ? "Försäljning" : "Sales", icon: ChartNoAxesCombined },
-      { href: "/dashboard/ai-agent", label: lang === "sv" ? "AI-optimering" : "AI Optimisation", icon: Bot },
-      { href: "/dashboard/employees", label: lang === "sv" ? "Team" : "Team", icon: Users },
-      { href: "/dashboard/reports", label: lang === "sv" ? "Rapporter" : "Reports", icon: ChartNoAxesCombined },
-      { href: "/dashboard/settings", label: lang === "sv" ? "Inställningar" : "Settings", icon: Settings },
+      { href: "/", label: lang === "sv" ? "Dashboard" : "Dashboard", icon: LayoutDashboard },
+      { href: "/logs", label: lang === "sv" ? "Uppgifter" : "Tasks", icon: CheckSquare, badge: openTaskCount },
+      { href: "/schedule", label: lang === "sv" ? "Schema" : "Schedule", icon: Calendar },
+      { href: "/chat", label: lang === "sv" ? "Meddelanden" : "Messages", icon: MessageSquareMore, badge: unreadChatCount },
+      { href: "/sales", label: lang === "sv" ? "Försäljning" : "Sales", icon: ChartNoAxesCombined },
+      { href: "/ai-agent", label: lang === "sv" ? "AI-optimering" : "AI Optimisation", icon: Bot },
+      { href: "/employees", label: lang === "sv" ? "Team" : "Team", icon: Users },
+      { href: "/reports", label: lang === "sv" ? "Rapporter" : "Reports", icon: ChartNoAxesCombined },
+      { href: "/settings", label: lang === "sv" ? "Inställningar" : "Settings", icon: Settings },
     ],
     [lang, openTaskCount, unreadChatCount]
   );
@@ -275,7 +275,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
         id: employee.id,
         label: employee.name,
         description: "Team member",
-        href: `/dashboard/employees/${employee.id}`,
+        href: `/employees/${employee.id}`,
       }));
 
     const taskMatches = logs
@@ -285,7 +285,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
         id: task.id,
         label: task.title,
         description: "Task",
-        href: "/dashboard/logs",
+        href: "/logs",
       }));
 
     return [...routeMatches, ...employeeMatches, ...taskMatches].slice(0, 8);
@@ -346,7 +346,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
         <aside className="app-sidebar">
           <div className="px-3">
             <div className="flex items-center justify-between gap-3">
-              <Link href="/dashboard" className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+              <Link href="/" className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
                 Skift
               </Link>
               <span className="status-chip status-neutral">
@@ -449,7 +449,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
 
               <div className="flex items-center gap-2">
                 <Button asChild className="h-10 rounded-xl px-4">
-                  <Link href="/dashboard/schedule?tab=day">
+                  <Link href="/schedule?tab=day">
                     <Plus className="h-4 w-4" />
                     {lang === "sv" ? "Lägg till pass" : "Add Shift"}
                   </Link>
@@ -474,7 +474,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
                   {lang === "en" ? "SV" : "EN"}
                 </Button>
                 <Button asChild variant="outline" className="hidden h-10 rounded-xl border-slate-200 bg-white sm:inline-flex">
-                  <Link href="/dashboard/settings">
+                  <Link href="/settings">
                     <Settings className="h-4 w-4" />
                     {lang === "sv" ? "Inställningar" : "Settings"}
                   </Link>

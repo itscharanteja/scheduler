@@ -293,7 +293,7 @@ export default function EmployeesDashboardPage() {
                       </td>
                       <td>
                         <Button asChild size="sm" variant="outline">
-                          <Link href={`/dashboard/employees/${employee.id}`}>Open</Link>
+                          <Link href={`/employees/${employee.id}`}>Open</Link>
                         </Button>
                       </td>
                     </tr>

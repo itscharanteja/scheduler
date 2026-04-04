@@ -7,9 +7,8 @@ import { startOfWeek } from "date-fns";
 import { ArrowLeft, Clock3, Mail, MapPin, MessageCircleMore, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/context/LanguageContext";
-import { mockEmployeeActivity } from "@/lib/mock-data";
-import { getEmployees, getLocations, getShiftsByWeek } from "@/lib/supabase";
-import type { Employee, Location, Shift } from "@/lib/types";
+import { getEmployees, getLocations, getShiftsByWeek, getEmployeeActivity } from "@/lib/supabase";
+import type { Employee, EmployeeActivityItem, Location, Shift } from "@/lib/types";
 
 function shiftHours(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(":").map(Number);
@@ -23,6 +22,7 @@ export default function EmployeeProfilePage() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
+  const [activity, setActivity] = useState<EmployeeActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,15 +30,17 @@ export default function EmployeeProfilePage() {
     (async () => {
       try {
         const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-        const [rows, locs, schedule] = await Promise.all([
+        const [rows, locs, schedule, activityData] = await Promise.all([
           getEmployees(),
           getLocations(),
           getShiftsByWeek(weekStart),
+          getEmployeeActivity(params.id, 6),
         ]);
         if (!active) return;
         setEmployee(rows.find((row) => row.id === params.id) ?? null);
         setLocations(locs);
         setWeekShifts(schedule.shifts);
+        setActivity(activityData);
       } finally {
         if (active) setLoading(false);
       }
@@ -60,14 +62,6 @@ export default function EmployeeProfilePage() {
     return locations.find((loc) => loc.id === locationId)?.name ?? "Unknown";
   };
 
-  const activity = useMemo(
-    () =>
-      mockEmployeeActivity
-        .filter((item) => item.employeeId === params.id)
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, 6),
-    [params.id]
-  );
 
   const recentHours = shifts.slice(0, 5).reduce(
     (sum, shift) => sum + shiftHours(shift.startTime, shift.endTime),
@@ -85,7 +79,7 @@ export default function EmployeeProfilePage() {
   return (
     <div className="space-y-6">
       <Button asChild variant="outline" className="w-fit">
-        <Link href="/dashboard/employees">
+        <Link href="/employees">
           <ArrowLeft className="h-4 w-4" />
           {lang === "sv" ? "Tillbaka till teamet" : "Back to team"}
         </Link>
@@ -132,13 +126,13 @@ export default function EmployeeProfilePage() {
 
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             <Button asChild>
-              <Link href="/dashboard/chat">
+              <Link href="/chat">
                 <MessageCircleMore className="h-4 w-4" />
                 {lang === "sv" ? "Skicka meddelande" : "Send message"}
               </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/dashboard/schedule?tab=day">
+              <Link href="/schedule?tab=day">
                 <Clock3 className="h-4 w-4" />
                 {lang === "sv" ? "Justera pass" : "Adjust shifts"}
               </Link>
@@ -167,18 +161,22 @@ export default function EmployeeProfilePage() {
       <section className="app-panel p-5">
         <h3 className="section-title">Recent activity</h3>
         <div className="mt-4 list-block">
-          {activity.map((item) => (
-            <div key={item.id} className="list-row">
-              <div className="list-row-main">
-                <div className="list-row-title">{item.title}</div>
-                <div className="list-row-copy">{item.detail}</div>
+          {activity.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-slate-500">No activity recorded yet.</div>
+          ) : (
+            activity.map((item) => (
+              <div key={item.id} className="list-row">
+                <div className="list-row-main">
+                  <div className="list-row-title">{item.title}</div>
+                  <div className="list-row-copy">{item.detail}</div>
+                </div>
+                <div className="inline-flex items-center gap-2 text-xs text-slate-500">
+                  <Mail className="h-3.5 w-3.5" />
+                  {new Date(item.timestamp).toLocaleString()}
+                </div>
               </div>
-              <div className="inline-flex items-center gap-2 text-xs text-slate-500">
-                <Mail className="h-3.5 w-3.5" />
-                {new Date(item.timestamp).toLocaleString()}
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </section>
     </div>

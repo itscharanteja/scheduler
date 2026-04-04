@@ -19,7 +19,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/context/LanguageContext";
 import { LOCATION_ID } from "@/lib/constants";
-import { mockWeather } from "@/lib/mock-data";
 import {
   createShift,
   deleteShift,
@@ -27,7 +26,7 @@ import {
   getShiftsByWeek,
   updateShift,
 } from "@/lib/supabase";
-import type { Employee, Shift } from "@/lib/types";
+import type { Employee, Shift, WeatherForecastDay } from "@/lib/types";
 
 function parseWeekParam(weekParam: string | null): Date {
   const match = weekParam?.match(/^(\d{4})-W(\d{2})$/);
@@ -82,6 +81,7 @@ function SchedulePageContent() {
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [weather, setWeather] = useState<WeatherForecastDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -123,13 +123,15 @@ function SchedulePageContent() {
     (async () => {
       try {
         setLoading(true);
-        const [employeeRows, schedule] = await Promise.all([
+        const [employeeRows, schedule, weatherRes] = await Promise.all([
           getEmployees(),
           getShiftsByWeek(weekStart, LOCATION_ID),
+          fetch(`/api/weather?locationId=${LOCATION_ID}`).then((r) => r.json()).catch(() => ({ forecasts: [] })),
         ]);
         if (!active) return;
         setEmployees(employeeRows);
         setShifts(schedule.shifts);
+        setWeather(Array.isArray(weatherRes.forecasts) ? weatherRes.forecasts.slice(0, 3) : []);
       } finally {
         if (active) setLoading(false);
       }
@@ -182,7 +184,7 @@ function SchedulePageContent() {
   function updateQuery(next: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
     Object.entries(next).forEach(([key, value]) => params.set(key, value));
-    router.push(`/dashboard/schedule?${params.toString()}`);
+    router.push(`/schedule?${params.toString()}`);
   }
 
   function openCreate(day: string) {
@@ -336,20 +338,26 @@ function SchedulePageContent() {
             </div>
             <div className="mt-4">
               <Button asChild size="sm">
-                <Link href="/dashboard/ai-agent">{lang === "sv" ? "Öppna AI-optimering" : "Open AI Optimisation"}</Link>
+                <Link href="/ai-agent">{lang === "sv" ? "Öppna AI-optimering" : "Open AI Optimisation"}</Link>
               </Button>
             </div>
           </div>
           <div className="mt-4 list-block">
-            {mockWeather.slice(0, 3).map((day) => (
-              <div key={day.date} className="list-row">
-                <div className="list-row-main">
-                  <div className="list-row-title">{day.date}</div>
-                  <div className="list-row-copy">{day.summary}</div>
-                </div>
-                <span className="status-chip status-neutral">{day.tempHigh}°</span>
+            {weather.length === 0 ? (
+              <div className="px-4 py-4 text-sm text-slate-500">
+                {lang === "sv" ? "Ingen väderdata tillgänglig." : "No weather data available."}
               </div>
-            ))}
+            ) : (
+              weather.map((day) => (
+                <div key={day.date} className="list-row">
+                  <div className="list-row-main">
+                    <div className="list-row-title">{day.date}</div>
+                    <div className="list-row-copy">{day.summary}</div>
+                  </div>
+                  <span className="status-chip status-neutral">{day.tempHigh}°</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>

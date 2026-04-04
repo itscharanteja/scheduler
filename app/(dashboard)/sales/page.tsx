@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { GlassSkeleton } from "@/components/ui/glass-skeleton";
 import { useLanguage } from "@/context/LanguageContext";
-import { mockSales } from "@/lib/mock-data";
+import { LOCATION_ID } from "@/lib/constants";
+import { getSales } from "@/lib/supabase";
+import type { SalesDay } from "@/lib/types";
 
 function currency(value: number) {
   return new Intl.NumberFormat("sv-SE", {
@@ -18,6 +21,9 @@ function currency(value: number) {
 export default function SalesPage() {
   const { lang } = useLanguage();
   const [range, setRange] = useState("7d");
+  const [allSales, setAllSales] = useState<SalesDay[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const text =
     lang === "sv"
       ? {
@@ -29,6 +35,7 @@ export default function SalesPage() {
           compare: "Daglig jämförelse",
           forecast: "Prognos mot utfall",
           export: "Exportera rapport",
+          noData: "Ingen försäljningsdata tillgänglig",
         }
       : {
           revenue: "Revenue",
@@ -39,16 +46,55 @@ export default function SalesPage() {
           compare: "Daily comparison",
           forecast: "Forecast vs actual",
           export: "Export report",
+          noData: "No sales data available",
         };
 
-  const sales = useMemo(() => {
-    if (range === "3d") return mockSales.slice(-3);
-    return mockSales.slice(-7);
-  }, [range]);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await getSales(LOCATION_ID, 7);
+        if (!active) return;
+        // getSales returns newest first — reverse so oldest→newest for charts
+        setAllSales([...data].reverse());
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
-  const today = sales.at(-1)!;
-  const weeklyAverage = sales.reduce((sum, day) => sum + day.revenue, 0) / sales.length;
-  const maxHourly = Math.max(...today.hourlyRevenue);
+  const sales = useMemo(() => {
+    if (range === "3d") return allSales.slice(-3);
+    return allSales.slice(-7);
+  }, [range, allSales]);
+
+  const today = sales.at(-1);
+  const weeklyAverage = sales.length > 0
+    ? sales.reduce((sum, day) => sum + day.revenue, 0) / sales.length
+    : 0;
+  const maxHourly = today ? Math.max(...today.hourlyRevenue, 1) : 1;
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <GlassSkeleton className="h-[460px]" />
+        <div className="grid gap-4 xl:grid-cols-2">
+          <GlassSkeleton className="h-48" />
+          <GlassSkeleton className="h-48" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!today) {
+    return (
+      <div className="app-panel px-5 py-10 text-center text-sm text-slate-600">
+        {text.noData}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -84,7 +130,7 @@ export default function SalesPage() {
             </div>
             <div className="metric-card">
               <div className="metric-label">{text.laborRatio}</div>
-              <div className="metric-value">{((today.laborCost / today.revenue) * 100).toFixed(1)}%</div>
+              <div className="metric-value">{today.revenue > 0 ? ((today.laborCost / today.revenue) * 100).toFixed(1) : "—"}%</div>
             </div>
           </div>
 
@@ -101,9 +147,7 @@ export default function SalesPage() {
                 <div key={index} className="flex flex-col items-center gap-2">
                   <div
                     className="w-full rounded-t-md bg-blue-600"
-                    style={{
-                      height: `${Math.max((value / maxHourly) * 180, 12)}px`,
-                    }}
+                    style={{ height: `${Math.max((value / maxHourly) * 180, 12)}px` }}
                     title={`${index.toString().padStart(2, "0")}:00 • ${currency(value)}`}
                   />
                   <div className="text-[10px] text-slate-500">{index.toString().padStart(2, "0")}</div>
@@ -123,7 +167,7 @@ export default function SalesPage() {
                   <div className="list-row-copy">{currency(today.revenue)} vs {currency(weeklyAverage)}</div>
                 </div>
                 <span className="status-chip status-info">
-                  {(((today.revenue - weeklyAverage) / weeklyAverage) * 100).toFixed(1)}%
+                  {weeklyAverage > 0 ? (((today.revenue - weeklyAverage) / weeklyAverage) * 100).toFixed(1) : "0"}%
                 </span>
               </div>
               <div className="list-row">
@@ -164,7 +208,7 @@ export default function SalesPage() {
                       <td>{day.date}</td>
                       <td>{currency(day.revenue)}</td>
                       <td>{day.orders}</td>
-                      <td>{((day.laborCost / day.revenue) * 100).toFixed(1)}%</td>
+                      <td>{day.revenue > 0 ? ((day.laborCost / day.revenue) * 100).toFixed(1) : "—"}%</td>
                     </tr>
                   ))}
                 </tbody>

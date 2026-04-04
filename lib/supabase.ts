@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Employee, Location, Shift, WeekSchedule, ChatChannel, ChatMessage } from "./types";
+import type { Employee, Location, Shift, WeekSchedule, ChatChannel, ChatMessage, SalesDay, DashboardAlert, EmployeeActivityItem } from "./types";
 import {
   addDays,
   endOfMonth,
@@ -885,6 +885,167 @@ export async function getFlaggedLogs(locationId: string, limit?: number): Promis
     return data || [];
   } catch (error) {
     console.error("[supabase:getFlaggedLogs]", error);
+    return [];
+  }
+}
+
+// ============================================================
+// Sales
+// ============================================================
+
+type DbDailySalesRow = {
+  id: string;
+  location_id: string;
+  date: string;
+  revenue: number;
+  orders: number;
+  average_order_value: number;
+  labor_cost: number;
+  comparison_revenue: number;
+  peak_label: string;
+  hourly_revenue: number[];
+  created_at: string;
+};
+
+function mapDailySales(row: DbDailySalesRow): SalesDay {
+  return {
+    id: row.id,
+    date: row.date,
+    revenue: Number(row.revenue),
+    orders: row.orders,
+    averageOrderValue: Number(row.average_order_value),
+    laborCost: Number(row.labor_cost),
+    comparisonRevenue: Number(row.comparison_revenue),
+    peakLabel: row.peak_label,
+    hourlyRevenue: Array.isArray(row.hourly_revenue) ? row.hourly_revenue : [],
+  };
+}
+
+export async function getSales(locationId: string, limit = 7): Promise<SalesDay[]> {
+  if (!supabaseClient) return [];
+  try {
+    const { data, error } = await supabaseClient
+      .from("daily_sales")
+      .select("*")
+      .eq("location_id", locationId)
+      .order("date", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data as DbDailySalesRow[]).map(mapDailySales);
+  } catch (error) {
+    console.error("[supabase:getSales]", error);
+    return [];
+  }
+}
+
+// ============================================================
+// Dashboard Alerts
+// ============================================================
+
+type DbDashboardAlertRow = {
+  id: string;
+  location_id: string;
+  tone: string;
+  title: string;
+  message: string;
+  resolved_at: string | null;
+  created_at: string;
+};
+
+function mapDashboardAlert(row: DbDashboardAlertRow): DashboardAlert {
+  return {
+    id: row.id,
+    tone: row.tone as DashboardAlert["tone"],
+    title: row.title,
+    message: row.message,
+  };
+}
+
+export async function getAlerts(locationId: string): Promise<DashboardAlert[]> {
+  if (!supabaseClient) return [];
+  try {
+    const { data, error } = await supabaseClient
+      .from("dashboard_alerts")
+      .select("*")
+      .eq("location_id", locationId)
+      .is("resolved_at", null)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data as DbDashboardAlertRow[]).map(mapDashboardAlert);
+  } catch (error) {
+    console.error("[supabase:getAlerts]", error);
+    return [];
+  }
+}
+
+export async function resolveAlert(alertId: string): Promise<void> {
+  if (!supabaseClient) return;
+  try {
+    const { error } = await supabaseClient
+      .from("dashboard_alerts")
+      .update({ resolved_at: new Date().toISOString() })
+      .eq("id", alertId);
+    if (error) throw error;
+  } catch (error) {
+    console.error("[supabase:resolveAlert]", error);
+  }
+}
+
+// ============================================================
+// Employee Activity
+// ============================================================
+
+type DbEmployeeActivityRow = {
+  id: string;
+  employee_id: string;
+  location_id: string;
+  type: string;
+  title: string;
+  detail: string;
+  timestamp: string;
+};
+
+function mapEmployeeActivity(row: DbEmployeeActivityRow): EmployeeActivityItem {
+  return {
+    id: row.id,
+    employeeId: row.employee_id,
+    type: row.type as EmployeeActivityItem["type"],
+    title: row.title,
+    detail: row.detail,
+    timestamp: row.timestamp,
+  };
+}
+
+export async function getActivity(locationId: string, limit = 20): Promise<EmployeeActivityItem[]> {
+  if (!supabaseClient) return [];
+  try {
+    const { data, error } = await supabaseClient
+      .from("employee_activity")
+      .select("*")
+      .eq("location_id", locationId)
+      .order("timestamp", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data as DbEmployeeActivityRow[]).map(mapEmployeeActivity);
+  } catch (error) {
+    console.error("[supabase:getActivity]", error);
+    return [];
+  }
+}
+
+export async function getEmployeeActivity(employeeId: string, limit = 6): Promise<EmployeeActivityItem[]> {
+  if (!supabaseClient) return [];
+  try {
+    const { data, error } = await supabaseClient
+      .from("employee_activity")
+      .select("*")
+      .eq("employee_id", employeeId)
+      .order("timestamp", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data as DbEmployeeActivityRow[]).map(mapEmployeeActivity);
+  } catch (error) {
+    console.error("[supabase:getEmployeeActivity]", error);
     return [];
   }
 }
