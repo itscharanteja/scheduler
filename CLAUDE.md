@@ -37,7 +37,106 @@ npm run lint          # Run ESLint
 npx tsc --noEmit     # TypeScript type check (no emit)
 ```
 
+## Authentication & Roles
+
+### Role System
+
+Four roles are defined in `public.user_profiles.role`:
+
+| Role          | Access                                                                 |
+| ------------- | ---------------------------------------------------------------------- |
+| `super_admin` | Full system access — all features, all data                           |
+| `admin`       | Scheduling, employee management, AI agent, all app features           |
+| `user_lead`   | Shift logs, sales, inventory, tasks, schedule (view only)             |
+| `user`        | Tasks, schedule (view only), chat                                     |
+
+### Auth Context
+
+**`context/AuthContext.tsx`** — wraps the entire app via `AuthProvider` in `app/layout.tsx`:
+
+- `useAuth()` — returns `{ user, loading, signIn, signOut, hasRole }`
+- `user` — `{ id, email, role, name }` or `null` if not signed in
+- `hasRole(...roles)` — returns `true` if the current user has any of the given roles
+- Dev bypass: if Supabase is not configured, `hasRole()` always returns `true`
+
+```tsx
+const { user, hasRole } = useAuth();
+if (!hasRole("admin", "super_admin")) return <AccessDenied />;
+```
+
+### Protected Routes
+
+**`middleware.ts`** redirects unauthenticated users to `/login`. Public routes (no auth required):
+- `/login`
+- `/reset-password`
+- `/auth/confirm` — exchanges Supabase one-time code for a session cookie
+
+### Nav Visibility by Role
+
+| Nav item    | Minimum role |
+| ----------- | ------------ |
+| Dashboard   | all          |
+| Tasks       | all          |
+| Schedule    | all          |
+| Messages    | all          |
+| Sales       | user_lead    |
+| Inventory   | user_lead    |
+| Reports     | user_lead    |
+| Team        | admin        |
+| AI Agent    | admin        |
+| Settings    | admin        |
+
+### Managing Users
+
+1. Invite via **Supabase Dashboard → Authentication → Users → Invite user**
+2. The trigger in `007_auth_roles.sql` auto-creates a `user_profiles` row (default role: `user`)
+3. Promote role in SQL Editor:
+
+```sql
+update public.user_profiles
+set role = 'admin',
+    employee_id = '<employee-uuid>'   -- optional: link to employees table
+where id = '<auth-user-uuid>';
+```
+
+4. To set a password directly (bypasses email):
+
+```sql
+update auth.users
+set encrypted_password = crypt('newpassword', gen_salt('bf'))
+where email = 'user@example.com';
+```
+
+5. Configure **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs** to include `http://localhost:3000/**` and your production domain for password reset emails to work.
+
 ## Architecture & Key Patterns
+
+### Route Structure
+
+All dashboard pages live in `app/(dashboard)/` — the route group strips the segment from the URL so `/dashboard/schedule` is just `/schedule`. Auth pages live in `app/(auth)/`.
+
+```
+app/
+  layout.tsx              — root layout: AuthProvider + Toaster
+  (auth)/
+    layout.tsx            — bare layout (no shell)
+    login/page.tsx
+    reset-password/page.tsx
+  (dashboard)/
+    layout.tsx            — wraps children in LanguageAppShell
+    page.tsx              — /
+    schedule/             — /schedule
+    logs/                 — /logs (tasks)
+    chat/                 — /chat
+    sales/                — /sales
+    inventory/            — /inventory
+    reports/              — /reports
+    employees/            — /employees
+    ai-agent/             — /ai-agent
+    settings/             — /settings
+  auth/
+    confirm/route.ts      — /auth/confirm (code exchange for password reset)
+```
 
 ### API Routes (Feature-Based Organization)
 
@@ -50,7 +149,7 @@ All API routes follow the pattern `/app/api/{feature}/{action}/route.ts`:
   - PATCH /api/chat/pin
   - POST /api/chat/channels/create
 
-- **Shift Logs** (`/api/shift-logs/*`): Daily shift leader logging
+- **Shift Logs** (`/api/shift-logs/*`): Daily shift leader narrative logs (not the task board)
   - GET /api/shift-logs (with optional limit, date filters)
   - GET /api/shift-logs/by-date, /api/shift-logs/flagged, /api/shift-logs/summary
   - POST /api/shift-logs/create
@@ -59,6 +158,16 @@ All API routes follow the pattern `/app/api/{feature}/{action}/route.ts`:
 - **Inventory** (`/api/inventory/*`): Stock management with auto-alerts
   - GET /api/inventory (all items), /api/inventory/low (alert items)
   - POST /api/inventory/update (triggers alert to managers chat if stock drops below critical)
+
+- **Sales** (`/api/sales`): Daily sales data
+  - GET /api/sales?locationId=&limit=
+
+- **Alerts** (`/api/alerts`): Dashboard alerts
+  - GET /api/alerts?locationId=
+  - PATCH /api/alerts (resolve an alert)
+
+- **Activity** (`/api/activity`): Employee activity feed
+  - GET /api/activity?locationId=&limit=
 
 - **AI Scheduling** (`/api/generate-schedule*`):
   - POST /api/generate-schedule (Claude, with GDPR + labor law validation)
@@ -76,7 +185,7 @@ All API routes follow the pattern `/app/api/{feature}/{action}/route.ts`:
 - Creates and caches `supabaseClient` (anon key auth)
 - Provides helper `requireClient()` for auth-required operations
 - Type mapping functions convert snake_case DB rows to camelCase app types:
-  - `mapEmployee()`, `mapShift()`, `mapInventoryItem()`, etc.
+  - `mapEmployee()`, `mapShift()`, `mapInventoryItem()`, `mapDailySales()`, `mapDashboardAlert()`, `mapEmployeeActivity()`, etc.
 - Wraps all queries with error handling and logging
 - Exports both queries and mutations with consistent patterns
 
@@ -100,9 +209,10 @@ export async function getShifts(locationId: string): Promise<Shift[]> {
 
 - `Employee`, `Shift`, `WeekSchedule`, `Location`
 - `InventoryItem`, `InventoryStatus` (ok|low|critical)
-- `ShiftLog`, `CreateShiftLogPayload`
+- `ShiftLog`, `CreateShiftLogPayload`, `ShiftLeaderLogEntry`
 - `ChatChannel`, `ChatMessage`, `SendMessagePayload`
 - `WeatherForecast`, `Sale`, `DashboardSummary`
+- `SalesDay`, `DashboardAlert`, `EmployeeActivityItem`
 
 All types match the Supabase schema (mapping handled in supabase.ts).
 
@@ -146,15 +256,30 @@ OPENAI_API_KEY=... (optional, for OpenAI route)
 NEXT_PUBLIC_OPENWEATHER_API_KEY=... (optional, for weather)
 ```
 
-If Supabase vars are missing, the app shows warnings and disables data actions (graceful degradation).
+If Supabase vars are missing, the app shows warnings, disables data actions (graceful degradation), and `hasRole()` returns `true` for everything (dev bypass).
 
 ### Supabase Migrations
 
 Run in order from `supabase/migrations/`:
 
-1. `001_initial_schema.sql` — creates tables (locations, employees, shifts, etc.)
-2. `002_roles_to_service_shiftleader_rutin.sql` — if migrating role model
-3. `003_rls_policies.sql` — row-level security
+1. `001_initial_schema.sql` — locations, employees, shifts, inventory, chat tables
+2. `002_roles_to_service_shiftleader_rutin.sql` — role model migration
+3. `003_rls_policies.sql` — row-level security for core tables
+4. `004_seed_real_data.sql` — seed employees, shifts, chat channels/messages
+5. `005_sales_alerts_activity.sql` — daily_sales, dashboard_alerts, employee_activity tables + seed
+6. `006_tasks.sql` — shift_logs table (narrative logs) + tasks table (task board) + seed tasks
+7. `007_auth_roles.sql` — user_profiles table + auto-create trigger on auth.users signup
+
+### shift_logs vs tasks
+
+These are two different concepts — do not confuse them:
+
+| Table        | Purpose                                      | Accessible to          |
+| ------------ | -------------------------------------------- | ---------------------- |
+| `shift_logs` | Narrative daily log written by shift leaders | user_lead, admin, super_admin |
+| `tasks`      | Individual actionable task items (task board)| all roles              |
+
+The `/logs` route in the UI is the **task board** (queries `tasks` table). The `shift_logs` table is used by the `/api/shift-logs/*` routes and the AI scheduling flow.
 
 ### Response Patterns
 
@@ -212,26 +337,25 @@ Run with: `npm run dev` then `./tests/script.sh` (adjust `BASE_URL`, `LOCATION_I
 - **`LOCATION_ID`** is defined in `lib/constants.ts` (`"22222222-2222-4222-8222-222222222222"`) and must be passed to every location-scoped query. Missing it causes silently empty results.
 - **Relational joins**: `chat_messages.sender_id` → `employees.id`. Always join `employees(name, role)` when fetching messages to get sender info.
 
-## Mock Data Policy
+## Real Data Sources
 
-Some data intentionally has no real API and must stay as mock data:
+All data is now backed by real Supabase tables. Use these functions (all in `lib/supabase.ts`):
 
-| Data                   | File               | Reason                      |
-| ---------------------- | ------------------ | --------------------------- |
-| `mockSales`            | `lib/mock-data.ts` | No sales API exists         |
-| `mockAlerts`           | `lib/mock-data.ts` | No alerts API exists        |
-| `mockEmployeeActivity` | `lib/mock-data.ts` | No activity feed API exists |
+| Data                | Function(s)                                      |
+| ------------------- | ------------------------------------------------ |
+| Employees           | `getEmployees()`                                 |
+| Shifts              | `getShiftsByWeek(weekStart)`                     |
+| Tasks (task board)  | `getShiftLogs(locationId)` — queries tasks table |
+| Shift leader logs   | `/api/shift-logs/*` routes                       |
+| Chat channels       | `getChannels(locationId)`                        |
+| Chat messages       | `getMessages(channelId)`                         |
+| Locations           | `getLocations()`                                 |
+| Sales               | `getSales(locationId, limit?)`                   |
+| Alerts              | `getAlerts(locationId)`, `resolveAlert(alertId)` |
+| Activity feed       | `getActivity(locationId, limit?)`                |
+| Employee activity   | `getEmployeeActivity(employeeId, limit?)`        |
 
-Do NOT attempt to replace these with API calls — they are permanent mock data for now.
-
-Real data sources (use Supabase / API routes):
-
-- Employees → `getEmployees()`
-- Shifts → `getShiftsByWeek()`
-- Shift logs / tasks → `getShiftLogs()`, `createShiftLog()`, `updateShiftLog()`
-- Chat channels → `getChannels()` or `/api/chat/channels`
-- Chat messages → `getMessages()` or `/api/chat/messages`
-- Locations → `getLocations()`
+There is no longer any permanent mock data — `mockSales`, `mockAlerts`, and `mockEmployeeActivity` have all been replaced with real DB tables and API functions.
 
 ## Notes for Future Work
 
@@ -239,4 +363,10 @@ Real data sources (use Supabase / API routes):
 - ✓ Chat module with automatic stock alerts via cross-module triggers
 - ✓ Shift logs with flagging and summaries
 - ✓ Inventory management with critical/low/ok status
-- Future: Consider adding RLS (row-level security) tests, multi-location isolation verification
+- ✓ Authentication with role-based access (super_admin, admin, user_lead, user)
+- ✓ Tasks table (task board at /logs) separate from shift_logs (narrative logs)
+- ✓ Real APIs for sales, alerts, and activity — no more mock data
+- Future: Wire tasks table to `/logs` page (currently uses getShiftLogs which queries shift_logs, not tasks)
+- Future: Build shift leader logs UI (restricted to user_lead+)
+- Future: Role management UI so admins can assign roles without SQL
+- Future: RLS tests, multi-location isolation verification

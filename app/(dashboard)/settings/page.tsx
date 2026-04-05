@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { SettingsPayload } from "@/lib/types";
+import { useAuth } from "@/context/AuthContext";
 
 const DEFAULT_SETTINGS: SettingsPayload = {
   userPreferences: {
@@ -31,6 +33,15 @@ const DEFAULT_SETTINGS: SettingsPayload = {
 };
 
 export default function SettingsPage() {
+  const { hasRole, loading: authLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && !hasRole("admin", "super_admin")) {
+      router.replace("/");
+    }
+  }, [authLoading, hasRole, router]);
+
   const [settings, setSettings] = useState<SettingsPayload>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -50,6 +61,8 @@ export default function SettingsPage() {
       }
     })();
   }, []);
+
+  if (authLoading || !hasRole("admin", "super_admin")) return null;
 
   async function saveSettings() {
     setSaving(true);

@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { addDays, format, getISOWeek, setISOWeek, setISOWeekYear, startOfWeek } from "date-fns";
 import { Bot, CheckCircle2, Loader2, Sparkles, TriangleAlert, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
 import { useAIAgent } from "@/hooks/use-ai-agent";
 
 type ResultShift = NonNullable<ReturnType<typeof useAIAgent>["result"]>["shifts"][number];
@@ -284,6 +285,17 @@ function DashboardAiAgentContent() {
 }
 
 export default function DashboardAiAgentPage() {
+  const { hasRole, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !hasRole("admin", "super_admin")) {
+      router.replace("/");
+    }
+  }, [loading, hasRole, router]);
+
+  if (loading || !hasRole("admin", "super_admin")) return null;
+
   return (
     <Suspense fallback={<div>Loading...</div>}>
       <DashboardAiAgentContent />

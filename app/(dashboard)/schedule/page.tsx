@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
 import { LOCATION_ID } from "@/lib/constants";
 import {
   createShift,
@@ -74,6 +75,8 @@ function shiftStatusClass(shift: Shift) {
 
 function SchedulePageContent() {
   const { lang } = useLanguage();
+  const { hasRole } = useAuth();
+  const canEdit = hasRole("admin", "super_admin");
   const router = useRouter();
   const searchParams = useSearchParams();
   const weekStart = useMemo(() => parseWeekParam(searchParams.get("week")), [searchParams]);
@@ -266,7 +269,7 @@ function SchedulePageContent() {
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+      <section className={canEdit ? "grid gap-4 xl:grid-cols-[1.15fr_0.85fr]" : ""}>
         <div className="app-panel p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="toolbar-row">
@@ -287,79 +290,85 @@ function SchedulePageContent() {
               <Button variant={tab === "day" ? "default" : "outline"} size="sm" onClick={() => updateQuery({ tab: "day", date: selectedDay })}>
                 {text.day}
               </Button>
-              <Button onClick={() => openCreate(selectedDay)}>
-                <Plus className="h-4 w-4" />
-                {text.addShift}
-              </Button>
+              {canEdit && (
+                <Button onClick={() => openCreate(selectedDay)}>
+                  <Plus className="h-4 w-4" />
+                  {text.addShift}
+                </Button>
+              )}
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-3">
-            <div className="metric-card">
-              <div className="metric-label">{text.hours}</div>
-              <div className="metric-value">{totalHours.toFixed(1)}h</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">{text.conflicts}</div>
-              <div className="metric-value">{dayConflicts}</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">{text.gaps}</div>
-              <div className="metric-value">{coverageGaps}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="app-panel p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="section-title">{text.ai}</h2>
-              <p className="section-copy">
-                {lang === "sv"
-                  ? "AI-förslag ska ligga nära schemat, inte gömmas långt bort."
-                  : "AI recommendations should sit next to the schedule, not hide elsewhere."}
-              </p>
-            </div>
-            <span className="status-chip status-info">
-              <Sparkles className="h-3.5 w-3.5" />
-              AI
-            </span>
-          </div>
-          <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
-            <div className="text-sm font-semibold text-slate-950">
-              {lang === "sv"
-                ? "Lägg till en extra serviceperson fredag 18:00-20:00."
-                : "Add one more service teammate Friday 18:00-20:00."}
-            </div>
-            <div className="mt-2 text-sm text-slate-700">
-              {lang === "sv"
-                ? "Middagsintensiteten och vädret pekar på högre tryck än normalnivå."
-                : "Dinner traffic and weather signals point to higher demand than usual."}
-            </div>
-            <div className="mt-4">
-              <Button asChild size="sm">
-                <Link href="/ai-agent">{lang === "sv" ? "Öppna AI-optimering" : "Open AI Optimisation"}</Link>
-              </Button>
-            </div>
-          </div>
-          <div className="mt-4 list-block">
-            {weather.length === 0 ? (
-              <div className="px-4 py-4 text-sm text-slate-500">
-                {lang === "sv" ? "Ingen väderdata tillgänglig." : "No weather data available."}
+          {canEdit && (
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <div className="metric-card">
+                <div className="metric-label">{text.hours}</div>
+                <div className="metric-value">{totalHours.toFixed(1)}h</div>
               </div>
-            ) : (
-              weather.map((day) => (
-                <div key={day.date} className="list-row">
-                  <div className="list-row-main">
-                    <div className="list-row-title">{day.date}</div>
-                    <div className="list-row-copy">{day.summary}</div>
-                  </div>
-                  <span className="status-chip status-neutral">{day.tempHigh}°</span>
-                </div>
-              ))
-            )}
-          </div>
+              <div className="metric-card">
+                <div className="metric-label">{text.conflicts}</div>
+                <div className="metric-value">{dayConflicts}</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-label">{text.gaps}</div>
+                <div className="metric-value">{coverageGaps}</div>
+              </div>
+            </div>
+          )}
         </div>
+
+        {canEdit && (
+          <div className="app-panel p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="section-title">{text.ai}</h2>
+                <p className="section-copy">
+                  {lang === "sv"
+                    ? "AI-förslag ska ligga nära schemat, inte gömmas långt bort."
+                    : "AI recommendations should sit next to the schedule, not hide elsewhere."}
+                </p>
+              </div>
+              <span className="status-chip status-info">
+                <Sparkles className="h-3.5 w-3.5" />
+                AI
+              </span>
+            </div>
+            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+              <div className="text-sm font-semibold text-slate-950">
+                {lang === "sv"
+                  ? "Lägg till en extra serviceperson fredag 18:00-20:00."
+                  : "Add one more service teammate Friday 18:00-20:00."}
+              </div>
+              <div className="mt-2 text-sm text-slate-700">
+                {lang === "sv"
+                  ? "Middagsintensiteten och vädret pekar på högre tryck än normalnivå."
+                  : "Dinner traffic and weather signals point to higher demand than usual."}
+              </div>
+              <div className="mt-4">
+                <Button asChild size="sm">
+                  <Link href="/ai-agent">{lang === "sv" ? "Öppna AI-optimering" : "Open AI Optimisation"}</Link>
+                </Button>
+              </div>
+            </div>
+            <div className="mt-4 list-block">
+              {weather.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-slate-500">
+                  {lang === "sv" ? "Ingen väderdata tillgänglig." : "No weather data available."}
+                </div>
+              ) : (
+                weather.map((day) => (
+                  <div key={day.date} className="list-row">
+                    <div className="list-row-main">
+                      <div className="list-row-title">{day.date}</div>
+                      <div className="list-row-copy">{day.summary}</div>
+                    </div>
+                    <span className="status-chip status-neutral">{day.tempHigh}°</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {tab === "week" ? (
@@ -384,19 +393,31 @@ function SchedulePageContent() {
                     ) : null}
                   </div>
                   <div className="mt-4 list-block">
-                    {dayShifts.map((shift) => (
-                      <button key={shift.id} type="button" className="list-row text-left" onClick={() => openEdit(shift)}>
-                        <div className="list-row-main">
-                          <div className="list-row-title">{shift.employeeName || shift.employeeId}</div>
-                          <div className="list-row-copy">{shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)} • {shift.role}</div>
+                    {dayShifts.map((shift) =>
+                      canEdit ? (
+                        <button key={shift.id} type="button" className="list-row text-left" onClick={() => openEdit(shift)}>
+                          <div className="list-row-main">
+                            <div className="list-row-title">{shift.employeeName || shift.employeeId}</div>
+                            <div className="list-row-copy">{shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)} • {shift.role}</div>
+                          </div>
+                          <span className={`status-chip ${shiftStatusClass(shift)}`}>{shift.status}</span>
+                        </button>
+                      ) : (
+                        <div key={shift.id} className="list-row">
+                          <div className="list-row-main">
+                            <div className="list-row-title">{shift.employeeName || shift.employeeId}</div>
+                            <div className="list-row-copy">{shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)} • {shift.role}</div>
+                          </div>
+                          <span className={`status-chip ${shiftStatusClass(shift)}`}>{shift.status}</span>
                         </div>
-                        <span className={`status-chip ${shiftStatusClass(shift)}`}>{shift.status}</span>
-                      </button>
-                    ))}
-                    <Button variant="outline" size="sm" className="w-full" onClick={() => openCreate(dayKey)}>
-                      <Plus className="h-4 w-4" />
-                      {text.addShift}
-                    </Button>
+                      )
+                    )}
+                    {canEdit && (
+                      <Button variant="outline" size="sm" className="w-full" onClick={() => openCreate(dayKey)}>
+                        <Plus className="h-4 w-4" />
+                        {text.addShift}
+                      </Button>
+                    )}
                   </div>
                 </div>
               );
@@ -435,7 +456,9 @@ function SchedulePageContent() {
                   </div>
                   <div className="toolbar-row">
                     <span className={`status-chip ${shiftStatusClass(shift)}`}>{shift.status}</span>
-                    <Button size="sm" variant="outline" onClick={() => openEdit(shift)}>Edit</Button>
+                    {canEdit && (
+                      <Button size="sm" variant="outline" onClick={() => openEdit(shift)}>Edit</Button>
+                    )}
                   </div>
                 </div>
               ))
@@ -444,7 +467,7 @@ function SchedulePageContent() {
         </section>
       )}
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      {canEdit && <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editingShiftId ? "Edit shift" : text.addShift}</DialogTitle>
@@ -494,7 +517,7 @@ function SchedulePageContent() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   );
 }

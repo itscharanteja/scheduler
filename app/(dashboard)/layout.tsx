@@ -1,7 +1,9 @@
+import { LanguageAppShell } from "@/components/app-shell";
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return <LanguageAppShell>{children}</LanguageAppShell>;
 }

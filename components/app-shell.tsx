@@ -5,15 +5,16 @@ import type React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Bell,
   Bot,
   Calendar,
   ChartNoAxesCombined,
   CheckSquare,
   ChevronRight,
   LayoutDashboard,
+  LogOut,
   Menu,
   MessageSquareMore,
+  Package,
   Plus,
   Search,
   Settings,
@@ -21,9 +22,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { LanguageProvider, useLanguage } from "@/context/LanguageContext";
+import { useAuth, type UserRole } from "@/context/AuthContext";
 import { LOCATION_ID } from "@/lib/constants";
-import { getEmployees, getShiftLogs, getChannels } from "@/lib/supabase";
-import type { AppNotification, Employee } from "@/lib/types";
+import { getEmployees, getTasks, getChannels } from "@/lib/supabase";
+import type { Employee } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -32,6 +34,8 @@ type NavItem = {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: number;
+  /** If set, only users with one of these roles see this item. */
+  roles?: UserRole[];
 };
 
 function getPageMeta(pathname: string, lang: "en" | "sv") {
@@ -92,124 +96,12 @@ function getPageMeta(pathname: string, lang: "en" | "sv") {
   return { title: copy.dashboard[0], subtitle: copy.dashboard[1] };
 }
 
-function NotificationPanel({
-  notifications,
-  loading,
-  open,
-  anchorRef,
-  onClose,
-  onRefresh,
-  onMarkAsRead,
-  onClear,
-}: {
-  notifications: AppNotification[];
-  loading: boolean;
-  open: boolean;
-  anchorRef: React.RefObject<HTMLButtonElement | null>;
-  onClose: () => void;
-  onRefresh: () => void;
-  onMarkAsRead: (id: string) => void;
-  onClear: () => void;
-}) {
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState({ top: 64, right: 16 });
-
-  useEffect(() => {
-    if (!open) return;
-    const update = () => {
-      const rect = anchorRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setPosition({
-        top: rect.bottom + 10,
-        right: Math.max(window.innerWidth - rect.right, 16),
-      });
-    };
-    update();
-    onRefresh();
-    document.addEventListener("mousedown", handleOutside);
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    return () => {
-      document.removeEventListener("mousedown", handleOutside);
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-    };
-
-    function handleOutside(event: MouseEvent) {
-      const target = event.target as Node;
-      if (panelRef.current?.contains(target) || anchorRef.current?.contains(target)) {
-        return;
-      }
-      onClose();
-    }
-  }, [anchorRef, onClose, onRefresh, open]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      ref={panelRef}
-      className="app-panel fixed z-50 w-[360px] max-w-[calc(100vw-24px)] p-3 animate-in fade-in zoom-in-95"
-      style={{ top: position.top, right: position.right }}
-    >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <div className="section-title text-sm">Notifications</div>
-          <div className="section-copy">Shift updates, conflicts, and AI alerts.</div>
-        </div>
-        <button
-          type="button"
-          className="text-xs font-semibold text-slate-600 hover:text-slate-900"
-          onClick={onClear}
-        >
-          Clear all
-        </button>
-      </div>
-      <div className="list-block max-h-[360px] overflow-auto">
-        {loading ? (
-          <div className="app-panel-muted h-24 animate-pulse" />
-        ) : notifications.length === 0 ? (
-          <div className="app-panel-muted px-4 py-8 text-center text-sm text-slate-600">
-            No unread issues right now.
-          </div>
-        ) : (
-          notifications.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="list-row w-full text-left"
-              onClick={() => onMarkAsRead(item.id)}
-            >
-              <div className="list-row-main">
-                <div className="flex items-center gap-2">
-                  <div className="list-row-title">{item.title}</div>
-                  {!item.read ? <span className="status-chip status-info">New</span> : null}
-                </div>
-                <div className="list-row-copy">{item.message}</div>
-              </div>
-              <div className="text-xs text-slate-500">
-                {new Date(item.timestamp).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </div>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
 
 function ShellLayout({ children }: { children: React.ReactNode }) {
   const { lang, setLang } = useLanguage();
+  const { user, hasRole, signOut } = useAuth();
   const pathname = usePathname();
   const currentMeta = useMemo(() => getPageMeta(pathname, lang), [lang, pathname]);
-  const bellRef = useRef<HTMLButtonElement | null>(null);
-
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
@@ -220,40 +112,46 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [channelCount, setChannelCount] = useState(0);
 
-  const unreadCount = notifications.filter((item) => !item.read).length;
-
   useEffect(() => {
     (async () => {
       try {
-        const [emps, shiftLogs, channels] = await Promise.all([
+        const isMyTasks = !hasRole("admin", "super_admin");
+        const taskFilter = isMyTasks && user?.employeeId
+          ? { assigneeId: user.employeeId, createdBy: user.employeeId }
+          : undefined;
+        const [emps, taskData, channels] = await Promise.all([
           getEmployees(),
-          getShiftLogs(LOCATION_ID, 50),
+          getTasks(LOCATION_ID, taskFilter),
           getChannels(LOCATION_ID),
         ]);
         setEmployees(emps);
-        setLogs(shiftLogs as any[]);
-        setOpenTaskCount((shiftLogs as any[]).filter((l) => l.status !== "done").length);
+        setLogs(taskData);
+        setOpenTaskCount(taskData.filter((t: any) => t.title && t.status !== "done").length);
         setUnreadChatCount((channels as any[]).reduce((sum, ch) => sum + (ch.unread_count ?? 0), 0));
         setChannelCount(channels.length);
       } catch (error) {
         console.error("[app-shell] Failed to load shell data:", error);
       }
     })();
-  }, []);
+  }, [user?.employeeId]); // re-run once user/employeeId is known
 
   const navItems = useMemo<NavItem[]>(
-    () => [
-      { href: "/", label: lang === "sv" ? "Dashboard" : "Dashboard", icon: LayoutDashboard },
-      { href: "/logs", label: lang === "sv" ? "Uppgifter" : "Tasks", icon: CheckSquare, badge: openTaskCount },
-      { href: "/schedule", label: lang === "sv" ? "Schema" : "Schedule", icon: Calendar },
-      { href: "/chat", label: lang === "sv" ? "Meddelanden" : "Messages", icon: MessageSquareMore, badge: unreadChatCount },
-      { href: "/sales", label: lang === "sv" ? "Försäljning" : "Sales", icon: ChartNoAxesCombined },
-      { href: "/ai-agent", label: lang === "sv" ? "AI-optimering" : "AI Optimisation", icon: Bot },
-      { href: "/employees", label: lang === "sv" ? "Team" : "Team", icon: Users },
-      { href: "/reports", label: lang === "sv" ? "Rapporter" : "Reports", icon: ChartNoAxesCombined },
-      { href: "/settings", label: lang === "sv" ? "Inställningar" : "Settings", icon: Settings },
-    ],
-    [lang, openTaskCount, unreadChatCount]
+    () =>
+      (
+        [
+          { href: "/", label: lang === "sv" ? "Dashboard" : "Dashboard", icon: LayoutDashboard },
+          { href: "/logs", label: lang === "sv" ? "Uppgifter" : "Tasks", icon: CheckSquare, badge: openTaskCount },
+          { href: "/schedule", label: lang === "sv" ? "Schema" : "Schedule", icon: Calendar },
+          { href: "/chat", label: lang === "sv" ? "Meddelanden" : "Messages", icon: MessageSquareMore, badge: unreadChatCount },
+          { href: "/sales", label: lang === "sv" ? "Försäljning" : "Sales", icon: ChartNoAxesCombined, roles: ["user_lead", "admin", "super_admin"] },
+          { href: "/inventory", label: lang === "sv" ? "Lager" : "Inventory", icon: Package, roles: ["user_lead", "admin", "super_admin"] },
+          { href: "/reports", label: lang === "sv" ? "Rapporter" : "Reports", icon: ChartNoAxesCombined, roles: ["user_lead", "admin", "super_admin"] },
+          { href: "/employees", label: lang === "sv" ? "Team" : "Team", icon: Users, roles: ["admin", "super_admin"] },
+          { href: "/ai-agent", label: lang === "sv" ? "AI-optimering" : "AI Optimisation", icon: Bot, roles: ["admin", "super_admin"] },
+          { href: "/settings", label: lang === "sv" ? "Inställningar" : "Settings", icon: Settings, roles: ["admin", "super_admin"] },
+        ] satisfies NavItem[]
+      ).filter((item) => !item.roles || hasRole(...item.roles)),
+    [lang, openTaskCount, unreadChatCount, hasRole]
   );
 
   const primaryMobileNav = navItems.slice(0, 5);
@@ -290,51 +188,6 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
 
     return [...routeMatches, ...employeeMatches, ...taskMatches].slice(0, 8);
   }, [deferredSearch, employees, logs, navItems]);
-
-  async function fetchNotifications() {
-    setNotificationsLoading(true);
-    try {
-      const response = await fetch("/api/notifications?limit=12", { cache: "no-store" });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error("Failed to load notifications.");
-      }
-      setNotifications(Array.isArray(payload.notifications) ? payload.notifications : []);
-    } catch (error) {
-      console.error(error);
-      toast.error("Could not load notifications");
-    } finally {
-      setNotificationsLoading(false);
-    }
-  }
-
-  async function markNotificationAsRead(id: string) {
-    setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, read: true } : item)));
-    try {
-      await fetch("/api/notifications", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function clearNotifications() {
-    try {
-      await fetch("/api/notifications", { method: "DELETE" });
-      setNotifications([]);
-      toast.success("Notifications cleared");
-    } catch (error) {
-      console.error(error);
-      toast.error("Could not clear notifications");
-    }
-  }
-
-  useEffect(() => {
-    void fetchNotifications();
-  }, [pathname]);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -401,6 +254,23 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
                 <span className="font-semibold text-slate-950">{channelCount}</span>
               </div>
             </div>
+            {user && (
+              <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-200 pt-3">
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-semibold text-slate-900">{user.name}</div>
+                  <div className="truncate text-xs text-slate-500">{user.role.replace("_", " ")}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                  aria-label="Sign out"
+                  title="Sign out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -448,24 +318,14 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               </div>
 
               <div className="flex items-center gap-2">
-                <Button asChild className="h-10 rounded-xl px-4">
-                  <Link href="/schedule?tab=day">
-                    <Plus className="h-4 w-4" />
-                    {lang === "sv" ? "Lägg till pass" : "Add Shift"}
-                  </Link>
-                </Button>
-                <button
-                  ref={bellRef}
-                  type="button"
-                  className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700"
-                  onClick={() => setNotificationsOpen((prev) => !prev)}
-                  aria-label="Notifications"
-                >
-                  <Bell className="h-5 w-5" />
-                  {unreadCount > 0 ? (
-                    <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-blue-500" />
-                  ) : null}
-                </button>
+                {hasRole("admin", "super_admin") && (
+                  <Button asChild className="h-10 rounded-xl px-4">
+                    <Link href="/schedule?tab=day">
+                      <Plus className="h-4 w-4" />
+                      {lang === "sv" ? "Lägg till pass" : "Add Shift"}
+                    </Link>
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   className="h-10 rounded-xl border-slate-200 bg-white"
@@ -473,12 +333,14 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
                 >
                   {lang === "en" ? "SV" : "EN"}
                 </Button>
-                <Button asChild variant="outline" className="hidden h-10 rounded-xl border-slate-200 bg-white sm:inline-flex">
-                  <Link href="/settings">
-                    <Settings className="h-4 w-4" />
-                    {lang === "sv" ? "Inställningar" : "Settings"}
-                  </Link>
-                </Button>
+                {hasRole("admin", "super_admin") && (
+                  <Button asChild variant="outline" className="hidden h-10 rounded-xl border-slate-200 bg-white sm:inline-flex">
+                    <Link href="/settings">
+                      <Settings className="h-4 w-4" />
+                      {lang === "sv" ? "Inställningar" : "Settings"}
+                    </Link>
+                  </Button>
+                )}
               </div>
             </header>
 
@@ -542,16 +404,6 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      <NotificationPanel
-        notifications={notifications}
-        loading={notificationsLoading}
-        open={notificationsOpen}
-        anchorRef={bellRef}
-        onClose={() => setNotificationsOpen(false)}
-        onRefresh={() => void fetchNotifications()}
-        onMarkAsRead={(id) => void markNotificationAsRead(id)}
-        onClear={() => void clearNotifications()}
-      />
     </div>
   );
 }

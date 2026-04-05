@@ -14,6 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
 import { LOCATION_ID } from "@/lib/constants";
 import {
   getEmployees,
@@ -48,6 +49,8 @@ function statusClass(value: number, warningAt: number, dangerAt: number) {
 
 export default function DashboardPage() {
   const { lang } = useLanguage();
+  const { user, hasRole } = useAuth();
+  const isBasicUser = !hasRole("user_lead", "admin", "super_admin");
   const [employeesCount, setEmployeesCount] = useState(0);
   const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
   const [logs, setLogs] = useState<ShiftLeaderLogEntry[]>([]);
@@ -239,6 +242,102 @@ export default function DashboardPage() {
       icon: MessageSquareMore,
     },
   ];
+
+  // Simplified dashboard for basic user role
+  if (isBasicUser) {
+    const myShifts = weekShifts
+      .filter((s) => s.employeeId === user?.employeeId)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return (
+      <div className="space-y-6">
+        <div className="app-panel p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="section-title">
+                {lang === "sv" ? "Dina kommande pass" : "Your upcoming shifts"}
+              </h3>
+              <p className="section-copy">
+                {lang === "sv"
+                  ? "Pass schemalagda för dig den här veckan."
+                  : "Shifts scheduled for you this week."}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 list-block">
+            {loading
+              ? Array.from({ length: 3 }).map((_, i) => (
+                  <GlassSkeleton key={i} className="h-12" />
+                ))
+              : myShifts.length === 0
+                ? (
+                  <div className="px-4 py-6 text-center text-sm text-slate-500">
+                    {lang === "sv" ? "Inga pass den här veckan." : "No shifts scheduled this week."}
+                  </div>
+                )
+                : myShifts.map((shift) => (
+                  <div key={shift.id} className="list-row">
+                    <div className="list-row-main">
+                      <div className="list-row-title">
+                        {format(new Date(`${shift.date}T00:00:00`), "EEE d MMM")}
+                      </div>
+                      <div className="list-row-copy">
+                        {shift.startTime} – {shift.endTime}
+                        {shift.role ? ` · ${shift.role}` : ""}
+                      </div>
+                    </div>
+                    <span className="status-chip status-neutral">
+                      {shiftHours(shift.startTime, shift.endTime).toFixed(1)}h
+                    </span>
+                  </div>
+                ))}
+          </div>
+        </div>
+
+        <div className="app-panel p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="section-title">{copy.activity}</h3>
+              <p className="section-copy">
+                {lang === "sv"
+                  ? "Senaste synliga signaler från teamet."
+                  : "Latest visible signals from the team."}
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/chat">{copy.open}</Link>
+            </Button>
+          </div>
+          <div className="mt-4 list-block">
+            {loading
+              ? Array.from({ length: 3 }).map((_, i) => (
+                  <GlassSkeleton key={i} className="h-12" />
+                ))
+              : activity.length === 0
+                ? (
+                  <div className="px-4 py-6 text-center text-sm text-slate-500">
+                    {lang === "sv" ? "Ingen aktivitet ännu." : "No activity yet."}
+                  </div>
+                )
+                : activity.map((item) => (
+                  <div key={item.id} className="list-row">
+                    <div className="list-row-main">
+                      <div className="list-row-title">{item.title}</div>
+                      <div className="list-row-copy">{item.detail}</div>
+                    </div>
+                    <div className="text-xs text-slate-500" suppressHydrationWarning>
+                      {new Date(item.timestamp).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </div>
+                ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

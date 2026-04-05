@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Mono, DM_Sans } from "next/font/google";
 import "./globals.css";
-import { LanguageAppShell } from "@/components/app-shell";
+import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "sonner";
 
 const dmSans = DM_Sans({
@@ -30,7 +30,7 @@ export default function RootLayout({
       <body
         className={`${dmSans.variable} ${dmMono.variable} antialiased bg-background text-foreground transition-colors duration-300`}
       >
-        <LanguageAppShell>{children}</LanguageAppShell>
+        <AuthProvider>{children}</AuthProvider>
         <Toaster
           position="top-right"
           richColors
