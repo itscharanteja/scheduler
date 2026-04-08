@@ -27,7 +27,7 @@ import {
   getShiftsByWeek,
   updateShift,
 } from "@/lib/supabase";
-import type { Employee, Shift, WeatherForecastDay } from "@/lib/types";
+import type { Employee, Shift, WeatherForecast } from "@/lib/types";
 
 function parseWeekParam(weekParam: string | null): Date {
   const match = weekParam?.match(/^(\d{4})-W(\d{2})$/);
@@ -84,7 +84,7 @@ function SchedulePageContent() {
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
-  const [weather, setWeather] = useState<WeatherForecastDay[]>([]);
+  const [weather, setWeather] = useState<WeatherForecast[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -357,12 +357,12 @@ function SchedulePageContent() {
                 </div>
               ) : (
                 weather.map((day) => (
-                  <div key={day.date} className="list-row">
+                  <div key={day.forecastDate} className="list-row">
                     <div className="list-row-main">
-                      <div className="list-row-title">{day.date}</div>
-                      <div className="list-row-copy">{day.summary}</div>
+                      <div className="list-row-title">{day.day} — {day.forecastDate}</div>
+                      <div className="list-row-copy">{day.staffingSuggestion}</div>
                     </div>
-                    <span className="status-chip status-neutral">{day.tempHigh}°</span>
+                    <span className="status-chip status-neutral">{day.temperatureHigh}°</span>
                   </div>
                 ))
               )}

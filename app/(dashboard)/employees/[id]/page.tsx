@@ -4,11 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { startOfWeek } from "date-fns";
-import { ArrowLeft, Clock3, Mail, MapPin, MessageCircleMore, Phone } from "lucide-react";
+import { ArrowLeft, Check, Clock3, Mail, MapPin, MessageCircleMore, Pencil, Phone, Shield, UserPlus, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { getEmployees, getLocations, getShiftsByWeek, getEmployeeActivity } from "@/lib/supabase";
+import { getEmployees, getLocations, getShiftsByWeek, getEmployeeActivity, updateEmployee } from "@/lib/supabase";
 import type { Employee, EmployeeActivityItem, Location, Shift } from "@/lib/types";
+
+type AccountProfile = { role: string; fullName: string };
 
 function shiftHours(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(":").map(Number);
@@ -16,14 +23,31 @@ function shiftHours(startTime: string, endTime: string): number {
   return (eh * 60 + em - (sh * 60 + sm)) / 60;
 }
 
+function suggestedRole(empRole: string): string {
+  return empRole === "shiftleader" ? "user_lead" : "user";
+}
+
 export default function EmployeeProfilePage() {
   const { lang } = useLanguage();
+  const { hasRole } = useAuth();
   const params = useParams<{ id: string }>();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
   const [activity, setActivity] = useState<EmployeeActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Role editing state
+  const [isEditingRole, setIsEditingRole] = useState(false);
+  const [editingRole, setEditingRole] = useState("");
+  const [savingRole, setSavingRole] = useState(false);
+
+  // Account management state
+  const [accountProfile, setAccountProfile] = useState<AccountProfile | null | undefined>(undefined);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("user");
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -41,6 +65,16 @@ export default function EmployeeProfilePage() {
         setLocations(locs);
         setWeekShifts(schedule.shifts);
         setActivity(activityData);
+
+        // Check if this employee already has an app account (admin+ only)
+        if (hasRole("admin", "super_admin")) {
+          fetch(`/api/admin/invite-employee?employeeId=${params.id}`)
+            .then((r) => r.json())
+            .then((d) => {
+              if (active) setAccountProfile(d.hasAccount ? d.profile : null);
+            })
+            .catch(() => { if (active) setAccountProfile(null); });
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -48,7 +82,52 @@ export default function EmployeeProfilePage() {
     return () => {
       active = false;
     };
-  }, [params.id]);
+  }, [params.id, hasRole]);
+
+  async function handleInvite() {
+    if (!employee || !inviteEmail.trim()) return;
+    setInviting(true);
+    try {
+      const res = await fetch("/api/admin/invite-employee", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          employeeId: employee.id,
+          email: inviteEmail.trim(),
+          appRole: inviteRole,
+          fullName: employee.name,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to send invite");
+      toast.success(`Invite sent to ${inviteEmail.trim()}`);
+      setAccountProfile({ role: inviteRole, fullName: employee.name });
+      setIsInviteOpen(false);
+      setInviteEmail("");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to send invite");
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function handleSaveRole() {
+    if (!employee || !editingRole || editingRole === employee.role) {
+      setIsEditingRole(false);
+      return;
+    }
+    setSavingRole(true);
+    try {
+      const updated = await updateEmployee(employee.id, { role: editingRole });
+      setEmployee(updated);
+      setIsEditingRole(false);
+      toast.success(lang === "sv" ? "Roll uppdaterad" : "Role updated");
+    } catch {
+      toast.error(lang === "sv" ? "Kunde inte uppdatera rollen" : "Could not update role");
+    } finally {
+      setSavingRole(false);
+    }
+  }
 
   const shifts = useMemo(
     () =>
@@ -78,23 +157,72 @@ export default function EmployeeProfilePage() {
 
   return (
     <div className="space-y-6">
-      <Button asChild variant="outline" className="w-fit">
-        <Link href="/employees">
-          <ArrowLeft className="h-4 w-4" />
-          {lang === "sv" ? "Tillbaka till teamet" : "Back to team"}
-        </Link>
-      </Button>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{employee.name}</h1>
+          <p className="page-subtitle">{employee.role} • {employee.employmentType}</p>
+        </div>
+        <div className="toolbar-row">
+          <span className="status-chip status-neutral">{employee.role}</span>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/employees">
+              <ArrowLeft className="h-4 w-4" />
+              {lang === "sv" ? "Tillbaka till teamet" : "Back to team"}
+            </Link>
+          </Button>
+        </div>
+      </div>
 
       <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <div className="app-panel p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">{employee.name}</h2>
-              <p className="mt-2 text-sm text-slate-600">{employee.role} • {employee.employmentType}</p>
+              <h2 className="text-lg font-semibold text-slate-950">{employee.name}</h2>
+              <p className="mt-1 text-sm text-slate-600">{employee.employmentType}</p>
             </div>
-            <span className={`status-chip ${employee.role === "shiftleader" ? "status-warning" : employee.role === "rutin" ? "status-info" : "status-neutral"}`}>
-              {employee.role}
-            </span>
+            {hasRole("admin", "super_admin") && (
+              isEditingRole ? (
+                <div className="flex items-center gap-2">
+                  <Select value={editingRole} onValueChange={setEditingRole}>
+                    <SelectTrigger className="h-8 w-36 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="service">service</SelectItem>
+                      <SelectItem value="shiftleader">shiftleader</SelectItem>
+                      <SelectItem value="rutin">rutin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveRole()}
+                    disabled={savingRole}
+                    className="rounded-lg p-1.5 text-green-600 hover:bg-green-50 disabled:opacity-50"
+                    title={lang === "sv" ? "Spara" : "Save"}
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingRole(false)}
+                    className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+                    title={lang === "sv" ? "Avbryt" : "Cancel"}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setEditingRole(employee.role); setIsEditingRole(true); }}
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+                  title={lang === "sv" ? "Redigera roll" : "Edit role"}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  {employee.role}
+                </button>
+              )
+            )}
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -138,7 +266,81 @@ export default function EmployeeProfilePage() {
               </Link>
             </Button>
           </div>
+
+          {hasRole("admin", "super_admin") && (
+            <div className="mt-4 border-t pt-4">
+              {accountProfile ? (
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <Shield className="h-4 w-4 text-slate-400" />
+                  {lang === "sv" ? "Appkonto:" : "App account:"}
+                  <span className="font-medium text-slate-900">{accountProfile.role}</span>
+                </div>
+              ) : accountProfile === null ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setInviteRole(suggestedRole(employee.role));
+                    setIsInviteOpen(true);
+                  }}
+                >
+                  <UserPlus className="h-4 w-4" />
+                  {lang === "sv" ? "Skapa appkonto" : "Create App Account"}
+                </Button>
+              ) : null /* still loading */}
+            </div>
+          )}
         </div>
+
+        <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{lang === "sv" ? "Skapa appkonto" : "Create App Account"}</DialogTitle>
+              <DialogDescription>
+                {lang === "sv"
+                  ? `Bjud in ${employee.name} via e-post. De får en länk för att sätta sitt lösenord.`
+                  : `Invite ${employee.name} by email. They'll receive a link to set their password.`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-1.5">
+                <label htmlFor="invite-email" className="text-sm font-medium text-slate-700">Email</label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <label htmlFor="invite-role" className="text-sm font-medium text-slate-700">{lang === "sv" ? "Roll" : "Role"}</label>
+                <Select value={inviteRole} onValueChange={setInviteRole}>
+                  <SelectTrigger id="invite-role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hasRole("super_admin") && (
+                      <SelectItem value="admin">Admin</SelectItem>
+                    )}
+                    <SelectItem value="user_lead">User Lead</SelectItem>
+                    <SelectItem value="user">User</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsInviteOpen(false)}>
+                {lang === "sv" ? "Avbryt" : "Cancel"}
+              </Button>
+              <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}>
+                {inviting
+                  ? (lang === "sv" ? "Skickar..." : "Sending...")
+                  : (lang === "sv" ? "Skicka inbjudan" : "Send Invite")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <div className="app-panel p-5">
           <h3 className="section-title">Recent shifts</h3>

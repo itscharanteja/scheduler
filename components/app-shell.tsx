@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  User,
   MessageSquareMore,
   Package,
   Plus,
@@ -236,29 +237,17 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <div className="app-panel-muted p-4">
-            <div className="section-title text-sm">
-              {lang === "sv" ? "Snabbstatus" : "Quick status"}
-            </div>
-            <div className="mt-3 grid gap-2 text-sm text-slate-700">
-              <div className="flex items-center justify-between">
-                <span>{lang === "sv" ? "Öppna uppgifter" : "Open tasks"}</span>
-                <span className="font-semibold text-slate-950">{openTaskCount}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>{lang === "sv" ? "Olästa meddelanden" : "Unread messages"}</span>
-                <span className="font-semibold text-slate-950">{unreadChatCount}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>{lang === "sv" ? "Kanaler live" : "Active channels"}</span>
-                <span className="font-semibold text-slate-950">{channelCount}</span>
-              </div>
-            </div>
-            {user && (
-              <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-200 pt-3">
-                <div className="min-w-0">
-                  <div className="truncate text-xs font-semibold text-slate-900">{user.name}</div>
-                  <div className="truncate text-xs text-slate-500">{user.role.replace("_", " ")}</div>
+          {user && (
+            <div className="app-panel-muted p-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600">
+                  <User className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-semibold text-slate-900">
+                    {(user.employeeId && employees.find(e => e.id === user.employeeId)?.name) || user.name}
+                  </div>
+                  <div className="truncate text-xs text-slate-500">{user.role.replace(/_/g, " ")}</div>
                 </div>
                 <button
                   type="button"
@@ -270,8 +259,17 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
                   <LogOut className="h-4 w-4" />
                 </button>
               </div>
-            )}
-          </div>
+              {user.employeeId && (
+                <Link
+                  href={`/employees/${user.employeeId}`}
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <User className="h-3.5 w-3.5" />
+                  {lang === "sv" ? "Min profil" : "My Profile"}
+                </Link>
+              )}
+            </div>
+          )}
         </aside>
 
         <div className="app-main">
@@ -365,20 +363,22 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               </div>
             ) : null}
 
-            <div className="page-header">
-              <div>
-                <h1 className="page-title">{currentMeta.title}</h1>
-                <p className="page-subtitle">{currentMeta.subtitle}</p>
-              </div>
-              <div className="toolbar-row">
-                <div className="status-chip status-neutral">
-                  {lang === "sv" ? "Olästa meddelanden" : "Unread messages"} {unreadChatCount}
+            {!/^\/employees\/.+/.test(pathname) && (
+              <div className="page-header">
+                <div>
+                  <h1 className="page-title">{currentMeta.title}</h1>
+                  <p className="page-subtitle">{currentMeta.subtitle}</p>
                 </div>
-                <div className="status-chip status-info">
-                  {lang === "sv" ? "Aktiva uppgifter" : "Active tasks"} {openTaskCount}
+                <div className="toolbar-row">
+                  <div className="status-chip status-neutral">
+                    {lang === "sv" ? "Olästa meddelanden" : "Unread messages"} {unreadChatCount}
+                  </div>
+                  <div className="status-chip status-info">
+                    {lang === "sv" ? "Aktiva uppgifter" : "Active tasks"} {openTaskCount}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div key={pathname} className="animate-page-enter">
               {children}

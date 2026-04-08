@@ -19,7 +19,7 @@ import { LOCATION_ID } from "@/lib/constants";
 import {
   getEmployees,
   getShiftsByWeek,
-  getShiftLogs,
+  getTasks,
   getChannels,
   getSales,
   getAlerts,
@@ -27,7 +27,6 @@ import {
 } from "@/lib/supabase";
 import type {
   Shift,
-  ShiftLeaderLogEntry,
   SalesDay,
   DashboardAlert,
   EmployeeActivityItem,
@@ -53,7 +52,7 @@ export default function DashboardPage() {
   const isBasicUser = !hasRole("user_lead", "admin", "super_admin");
   const [employeesCount, setEmployeesCount] = useState(0);
   const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
-  const [logs, setLogs] = useState<ShiftLeaderLogEntry[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [todaySales, setTodaySales] = useState<SalesDay | null>(null);
   const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
@@ -82,7 +81,7 @@ export default function DashboardPage() {
         ] = await Promise.all([
           getEmployees(),
           getShiftsByWeek(weekStart, LOCATION_ID),
-          getShiftLogs(LOCATION_ID, 20),
+          getTasks(LOCATION_ID),
           getChannels(LOCATION_ID),
           getSales(LOCATION_ID, 1),
           getAlerts(LOCATION_ID),
@@ -91,7 +90,7 @@ export default function DashboardPage() {
         if (!active) return;
         setEmployeesCount(employees.length);
         setWeekShifts(schedule.shifts);
-        setLogs(shiftLogs as ShiftLeaderLogEntry[]);
+        setLogs(shiftLogs);
         setUnreadChatCount(
           (channels as any[]).reduce(
             (sum, ch) => sum + (ch.unread_count ?? 0),
@@ -115,14 +114,11 @@ export default function DashboardPage() {
     [todayKey, weekShifts],
   );
 
-  const openTasks = logs.filter(
-    (task: ShiftLeaderLogEntry) => task.status !== "done",
-  );
+  const openTasks = logs.filter((task) => task.status !== "done");
   const overdueTasks = openTasks.filter(
-    (task: ShiftLeaderLogEntry) =>
+    (task) =>
       task.dueTime &&
-      new Date(task.dueTime).getTime() <
-        new Date(`${todayKey}T16:00:00`).getTime(),
+      new Date(task.dueTime).getTime() < Date.now(),
   );
   const staffOnShift = new Set(todayShifts.map((shift) => shift.employeeId))
     .size;
