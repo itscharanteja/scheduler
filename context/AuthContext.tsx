@@ -39,15 +39,19 @@ async function fetchProfile(
   if (!supabaseClient) return null;
   const { data, error } = await supabaseClient
     .from("user_profiles")
-    .select("role, full_name, employee_id")
+    .select("role, full_name, email, employee_id, employees(name)")
     .eq("id", userId)
     .single();
   if (error || !data) return null;
+  // Prefer the linked employee's name; fall back to full_name; never show email as a name
+  const empRel = data.employees;
+  const employeeName = (Array.isArray(empRel) ? empRel[0]?.name : (empRel as { name: string } | null)?.name) ?? null;
+  const displayName = employeeName ?? (data.full_name as string | null) ?? null;
   return {
     id: userId,
-    email,
+    email: (data.email as string | null) ?? email,
     role: (data.role as UserRole) ?? "user",
-    name: (data.full_name as string | null) ?? email,
+    name: displayName ?? email,
     employeeId: (data.employee_id as string | null) ?? null,
   };
 }
@@ -62,12 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    supabaseClient.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const profile = await fetchProfile(
-          session.user.id,
-          session.user.email ?? ""
-        );
+    supabaseClient.auth.getUser().then(async ({ data: { user } }) => {
+      if (user) {
+        const profile = await fetchProfile(user.id, user.email ?? "");
         setUser(profile);
       }
       setLoading(false);
@@ -76,12 +77,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabaseClient.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const profile = await fetchProfile(
-          session.user.id,
-          session.user.email ?? ""
-        );
-        setUser(profile);
+      if (session) {
+        // Re-verify with getUser() — do not trust session.user directly
+        const { data: { user } } = await supabaseClient!.auth.getUser();
+        if (user) {
+          const profile = await fetchProfile(user.id, user.email ?? "");
+          setUser(profile);
+        } else {
+          setUser(null);
+        }
       } else {
         setUser(null);
       }

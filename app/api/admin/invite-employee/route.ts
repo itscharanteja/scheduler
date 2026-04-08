@@ -38,8 +38,8 @@ function makeUserClient(req: NextRequest) {
 /** Return the caller's role from user_profiles, or null if unauthenticated. */
 async function getCallerRole(req: NextRequest): Promise<CallerRole | null> {
   const userClient = makeUserClient(req);
-  const { data: { session } } = await userClient.auth.getSession();
-  if (!session) return null;
+  const { data: { user } } = await userClient.auth.getUser();
+  if (!user) return null;
 
   // Use service role to read user_profiles (bypasses RLS that only shows own row)
   if (!SERVICE_ROLE_KEY) return null;
@@ -47,7 +47,7 @@ async function getCallerRole(req: NextRequest): Promise<CallerRole | null> {
   const { data } = await adminClient
     .from("user_profiles")
     .select("role")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .single();
 
   return (data as { role: CallerRole } | null)?.role ?? null;
@@ -165,6 +165,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         role: appRole,
         employee_id: employeeId,
         full_name: fullName,
+        email,
       })
       .eq("id", newUserId);
 

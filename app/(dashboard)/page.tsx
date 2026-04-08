@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { addDays, format, startOfWeek } from "date-fns";
+import { format, startOfWeek } from "date-fns";
 import {
   AlertTriangle,
-  Bot,
   CheckSquare,
   ChevronRight,
   MessageSquareMore,
@@ -129,66 +128,50 @@ export default function DashboardPage() {
     (sum, shift) => sum + shiftHours(shift.startTime, shift.endTime),
     0,
   );
-  const coverageGaps = Math.max(0, 6 - staffOnShift);
-
   const copy =
     lang === "sv"
       ? {
           sales: "Försäljning idag",
           team: "På pass nu",
           tasks: "Uppgifter nu",
-          gaps: "Bemanningsluckor",
           messages: "Olästa meddelanden",
           alerts: "Viktigt just nu",
-          ai: "AI-förslag",
           quickActions: "Snabbåtgärder",
           activity: "Senaste teamaktivitet",
           viewAll: "Visa allt",
           review: "Granska",
           open: "Öppna",
-          approve: "Godkänn",
           addShift: "Lägg till pass",
           assignTask: "Ny uppgift",
           sendMessage: "Skicka meddelande",
           noLeader: "Ingen skiftledare planerad idag",
           leaderReady: "Skiftledare planerad för dagen",
           labour: "Planerade timmar idag",
-          store: "Enhet",
           staffing: "Bemanningsstatus",
           dueNow: "Förfaller nu",
           unread: "Olästa uppdateringar",
-          suggestion: "AI ser hög trycknivå 18:00–20:00",
-          suggestionBody:
-            "Lägg till en extra serviceperson för att minska köbildning och hålla leveranstider.",
           noSales: "Ingen försäljningsdata idag",
         }
       : {
           sales: "Sales today",
           team: "On shift now",
           tasks: "Tasks due now",
-          gaps: "Coverage gaps",
           messages: "Unread messages",
           alerts: "Needs attention",
-          ai: "AI suggestions",
           quickActions: "Quick actions",
           activity: "Recent team activity",
           viewAll: "View all",
           review: "Review",
           open: "Open",
-          approve: "Approve",
           addShift: "Add shift",
           assignTask: "New task",
           sendMessage: "Send message",
           noLeader: "No shift leader scheduled today",
           leaderReady: "Shift leader scheduled for today",
           labour: "Planned hours today",
-          store: "Store",
           staffing: "Staffing status",
           dueNow: "Due now",
           unread: "Unread updates",
-          suggestion: "AI sees pressure from 18:00-20:00",
-          suggestionBody:
-            "Add one more service teammate to reduce queue time and protect delivery speed.",
           noSales: "No sales data for today",
         };
 
@@ -340,10 +323,7 @@ export default function DashboardPage() {
       <section className="app-panel p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="status-chip status-neutral">
-              {copy.store}: {copy.store}
-            </div>
-            <h2 className="mt-3 text-xl font-semibold text-slate-950">
+            <h2 className="text-xl font-semibold text-slate-950">
               {copy.quickActions}
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-600">
@@ -404,8 +384,7 @@ export default function DashboardPage() {
             })}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
-        <div className="space-y-4">
+      <section className="space-y-4">
           <div className="app-panel p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -479,92 +458,6 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="app-panel p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="section-title">{copy.ai}</h3>
-                <p className="section-copy">
-                  {lang === "sv"
-                    ? "Direkt godkänn eller gå vidare till AI-vyn."
-                    : "Approve directly or open the full AI workspace."}
-                </p>
-              </div>
-              <span className="status-chip status-info">
-                <Bot className="h-3.5 w-3.5" />1
-              </span>
-            </div>
-            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
-              <div className="text-sm font-semibold text-slate-950">
-                {copy.suggestion}
-              </div>
-              <div className="mt-2 text-sm text-slate-700">
-                {copy.suggestionBody}
-              </div>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                <Button asChild size="sm">
-                  <Link href="/ai-agent">{copy.approve}</Link>
-                </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/ai-agent">{copy.review}</Link>
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <div className="app-panel p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="section-title">{copy.gaps}</h3>
-                <p className="section-copy">
-                  {lang === "sv"
-                    ? "Fokusera på dagens luckor innan passet blir stressigt."
-                    : "Focus on today's gaps before the shift gets busy."}
-                </p>
-              </div>
-              <span
-                className={`status-chip ${coverageGaps > 0 ? "status-warning" : "status-success"}`}
-              >
-                {coverageGaps}
-              </span>
-            </div>
-            <div className="mt-4 list-block">
-              {Array.from({ length: 3 }, (_, index) => {
-                const slot = addDays(new Date(`${todayKey}T00:00:00`), index);
-                return (
-                  <div key={index} className="list-row">
-                    <div className="list-row-main">
-                      <div className="list-row-title">
-                        {format(slot, "EEE d MMM")} •{" "}
-                        {index === 0
-                          ? "18:00-20:00"
-                          : index === 1
-                            ? "11:00-13:00"
-                            : "20:00-22:00"}
-                      </div>
-                      <div className="list-row-copy">
-                        {index === 0
-                          ? lang === "sv"
-                            ? "Efterfrågan väntas stiga snabbare än nuvarande bemanning."
-                            : "Demand is expected to rise faster than current staffing."
-                          : lang === "sv"
-                            ? "Täckning ser stabil ut men bör bevakas."
-                            : "Coverage looks stable but should be watched."}
-                      </div>
-                    </div>
-                    <span
-                      className={`status-chip ${index === 0 ? "status-danger" : "status-neutral"}`}
-                    >
-                      {index === 0 ? "Urgent" : "Watch"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
       </section>
     </div>
   );

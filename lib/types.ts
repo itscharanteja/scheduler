@@ -228,3 +228,43 @@ export interface ShiftLog {
   createdAt: string;
   updatedAt?: string;
 }
+
+export interface FeedPost {
+  id: string;
+  authorId: string;
+  authorName: string;
+  content: string;
+  imageUrl?: string | null;
+  linkUrl?: string | null;
+  linkTitle?: string | null;
+  repostOf?: FeedPost | null;
+  likeCount: number;
+  commentCount: number;
+  repostCount: number;
+  likedByMe: boolean;
+  repostedByMe: boolean;
+  isDeleted: boolean;
+  createdAt: string;
+}
+
+export interface FeedComment {
+  id: string;
+  postId: string;
+  authorId: string;
+  authorName: string;
+  content: string;
+  isDeleted: boolean;
+  createdAt: string;
+}
+
+export interface FeedReport {
+  id: string;
+  postId: string;
+  reporterId: string;
+  reporterName: string;
+  reason: string;
+  status: "pending" | "reviewed" | "dismissed";
+  createdAt: string;
+  postContent?: string;
+  postAuthorName?: string;
+}

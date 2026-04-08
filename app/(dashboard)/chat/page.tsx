@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Pin, Search, SendHorizonal } from "lucide-react";
+import { Search, SendHorizonal } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,7 +70,6 @@ export default function ChatPage() {
     lang === "sv"
       ? {
           search: "Sök kanal eller innehåll",
-          pinned: "Fästa uppdateringar",
           channels: "Kanaler",
           unread: "oläst",
           composer: "Skriv ett kort operativt meddelande",
@@ -78,7 +77,6 @@ export default function ChatPage() {
         }
       : {
           search: "Search channels or content",
-          pinned: "Pinned updates",
           channels: "Channels",
           unread: "unread",
           composer: "Write a short operational update",
@@ -137,15 +135,6 @@ export default function ChatPage() {
     });
   }
 
-  const pinnedItems = [
-    lang === "sv"
-      ? "18:00-20:00 kräver extra koll på leveransflödet."
-      : "18:00-20:00 needs extra watch on delivery flow.",
-    lang === "sv"
-      ? "Skiftledare bekräftar personaltäckning senast 15:30."
-      : "Shift leader confirms staffing coverage by 15:30.",
-  ];
-
   return (
     <div className="grid gap-4 xl:grid-cols-[280px_340px_minmax(0,1fr)]">
       <aside className="app-panel p-4">
@@ -180,22 +169,6 @@ export default function ChatPage() {
       </aside>
 
       <section className="space-y-4">
-        <div className="app-panel p-4">
-          <div className="flex items-center gap-2">
-            <Pin className="h-4 w-4 text-slate-500" />
-            <h3 className="section-title">{text.pinned}</h3>
-          </div>
-          <div className="mt-4 list-block">
-            {pinnedItems.map((item) => (
-              <div key={item} className="list-row surface-warning">
-                <div className="list-row-main">
-                  <div className="list-row-title">{item}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         <div className="app-panel p-4">
           <div className="flex items-center justify-between gap-3">
             <div>

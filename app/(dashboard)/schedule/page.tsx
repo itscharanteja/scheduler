@@ -333,23 +333,6 @@ function SchedulePageContent() {
                 AI
               </span>
             </div>
-            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
-              <div className="text-sm font-semibold text-slate-950">
-                {lang === "sv"
-                  ? "Lägg till en extra serviceperson fredag 18:00-20:00."
-                  : "Add one more service teammate Friday 18:00-20:00."}
-              </div>
-              <div className="mt-2 text-sm text-slate-700">
-                {lang === "sv"
-                  ? "Middagsintensiteten och vädret pekar på högre tryck än normalnivå."
-                  : "Dinner traffic and weather signals point to higher demand than usual."}
-              </div>
-              <div className="mt-4">
-                <Button asChild size="sm">
-                  <Link href="/ai-agent">{lang === "sv" ? "Öppna AI-optimering" : "Open AI Optimisation"}</Link>
-                </Button>
-              </div>
-            </div>
             <div className="mt-4 list-block">
               {weather.length === 0 ? (
                 <div className="px-4 py-4 text-sm text-slate-500">
