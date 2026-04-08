@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { addDays, format, getISOWeek, setISOWeek, setISOWeekYear, startOfWeek } from "date-fns";
 import { Bot, CheckCircle2, Loader2, Sparkles, TriangleAlert, XCircle } from "lucide-react";
@@ -62,6 +63,8 @@ function DashboardAiAgentContent() {
           source: "Source signals",
         };
 
+  const router = useRouter();
+
   const {
     prompt,
     setPrompt,
@@ -76,6 +79,13 @@ function DashboardAiAgentContent() {
     applyGenerated,
     isSupabaseConfigured,
   } = useAIAgent({ weekStart });
+
+  async function handleApply() {
+    const weekParam = await applyGenerated();
+    if (weekParam) {
+      router.push(`/schedule?week=${weekParam}`);
+    }
+  }
 
   const dayDates = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
@@ -154,7 +164,7 @@ function DashboardAiAgentContent() {
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {result ? copy.regenerate : copy.generate}
             </Button>
-            <Button variant="outline" onClick={applyGenerated} disabled={applying || !result?.shifts.length || !isSupabaseConfigured}>
+            <Button variant="outline" onClick={() => void handleApply()} disabled={applying || !result?.shifts.length || !isSupabaseConfigured}>
               {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               {applying ? copy.applying : copy.apply}
             </Button>
@@ -167,7 +177,13 @@ function DashboardAiAgentContent() {
           ) : null}
           {success ? (
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              {success}
+              <p>{success}</p>
+              <Link
+                href={`/schedule?week=${format(weekStart, "RRRR-'W'II")}`}
+                className="mt-2 inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:opacity-75"
+              >
+                View schedule →
+              </Link>
             </div>
           ) : null}
         </div>
@@ -257,7 +273,7 @@ function DashboardAiAgentContent() {
                 <XCircle className="h-4 w-4" />
                 {copy.reject}
               </Button>
-              <Button size="sm" onClick={applyGenerated} disabled={applying || !result?.shifts?.length || !isSupabaseConfigured}>
+              <Button size="sm" onClick={() => void handleApply()} disabled={applying || !result?.shifts?.length || !isSupabaseConfigured}>
                 <CheckCircle2 className="h-4 w-4" />
                 {copy.approve}
               </Button>

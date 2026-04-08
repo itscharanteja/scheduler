@@ -609,7 +609,7 @@ export async function getCachedWeather(
     if (!supabaseClient) return null;
 
     const { data, error } = await supabaseClient
-      .from("weather_forecasts")
+      .from("weather_cache")
       .select("*")
       .eq("location_id", locationId)
       .order("forecast_date", { ascending: true });
@@ -646,7 +646,7 @@ export async function upsertWeatherForecast(
     }));
 
     const { error } = await client
-      .from("weather_forecasts")
+      .from("weather_cache")
       .upsert(data, { onConflict: "location_id,forecast_date" });
 
     if (error) throw error;

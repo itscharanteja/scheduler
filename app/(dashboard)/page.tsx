@@ -115,9 +115,7 @@ export default function DashboardPage() {
 
   const openTasks = logs.filter((task) => task.status !== "done");
   const overdueTasks = openTasks.filter(
-    (task) =>
-      task.dueTime &&
-      new Date(task.dueTime).getTime() < Date.now(),
+    (task) => task.dueTime && new Date(task.dueTime).getTime() < Date.now(),
   );
   const staffOnShift = new Set(todayShifts.map((shift) => shift.employeeId))
     .size;
@@ -198,7 +196,7 @@ export default function DashboardPage() {
       value: `${staffOnShift}/${Math.max(employeesCount, staffOnShift)}`,
       note: shiftLeaderCoverage ? copy.leaderReady : copy.noLeader,
       status: shiftLeaderCoverage ? "status-success" : "status-danger",
-      actionHref: "/employees",
+      actionHref: "/schedule",
       actionLabel: copy.open,
       icon: Users,
     },
@@ -244,32 +242,34 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="mt-4 list-block">
-            {loading
-              ? Array.from({ length: 3 }).map((_, i) => (
-                  <GlassSkeleton key={i} className="h-12" />
-                ))
-              : myShifts.length === 0
-                ? (
-                  <div className="px-4 py-6 text-center text-sm text-slate-500">
-                    {lang === "sv" ? "Inga pass den här veckan." : "No shifts scheduled this week."}
-                  </div>
-                )
-                : myShifts.map((shift) => (
-                  <div key={shift.id} className="list-row">
-                    <div className="list-row-main">
-                      <div className="list-row-title">
-                        {format(new Date(`${shift.date}T00:00:00`), "EEE d MMM")}
-                      </div>
-                      <div className="list-row-copy">
-                        {shift.startTime} – {shift.endTime}
-                        {shift.role ? ` · ${shift.role}` : ""}
-                      </div>
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <GlassSkeleton key={i} className="h-12" />
+              ))
+            ) : myShifts.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-slate-500">
+                {lang === "sv"
+                  ? "Inga pass den här veckan."
+                  : "No shifts scheduled this week."}
+              </div>
+            ) : (
+              myShifts.map((shift) => (
+                <div key={shift.id} className="list-row">
+                  <div className="list-row-main">
+                    <div className="list-row-title">
+                      {format(new Date(`${shift.date}T00:00:00`), "EEE d MMM")}
                     </div>
-                    <span className="status-chip status-neutral">
-                      {shiftHours(shift.startTime, shift.endTime).toFixed(1)}h
-                    </span>
+                    <div className="list-row-copy">
+                      {shift.startTime} – {shift.endTime}
+                      {shift.role ? ` · ${shift.role}` : ""}
+                    </div>
                   </div>
-                ))}
+                  <span className="status-chip status-neutral">
+                    {shiftHours(shift.startTime, shift.endTime).toFixed(1)}h
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -288,30 +288,33 @@ export default function DashboardPage() {
             </Button>
           </div>
           <div className="mt-4 list-block">
-            {loading
-              ? Array.from({ length: 3 }).map((_, i) => (
-                  <GlassSkeleton key={i} className="h-12" />
-                ))
-              : activity.length === 0
-                ? (
-                  <div className="px-4 py-6 text-center text-sm text-slate-500">
-                    {lang === "sv" ? "Ingen aktivitet ännu." : "No activity yet."}
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <GlassSkeleton key={i} className="h-12" />
+              ))
+            ) : activity.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-slate-500">
+                {lang === "sv" ? "Ingen aktivitet ännu." : "No activity yet."}
+              </div>
+            ) : (
+              activity.map((item) => (
+                <div key={item.id} className="list-row">
+                  <div className="list-row-main">
+                    <div className="list-row-title">{item.title}</div>
+                    <div className="list-row-copy">{item.detail}</div>
                   </div>
-                )
-                : activity.map((item) => (
-                  <div key={item.id} className="list-row">
-                    <div className="list-row-main">
-                      <div className="list-row-title">{item.title}</div>
-                      <div className="list-row-copy">{item.detail}</div>
-                    </div>
-                    <div className="text-xs text-slate-500" suppressHydrationWarning>
-                      {new Date(item.timestamp).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
+                  <div
+                    className="text-xs text-slate-500"
+                    suppressHydrationWarning
+                  >
+                    {new Date(item.timestamp).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </div>
-                ))}
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -385,79 +388,79 @@ export default function DashboardPage() {
       </section>
 
       <section className="space-y-4">
-          <div className="app-panel p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="section-title">{copy.alerts}</h3>
-                <p className="section-copy">
-                  {copy.staffing}: {staffOnShift} people scheduled,{" "}
-                  {totalHours.toFixed(1)}h {copy.labour.toLowerCase()}.
-                </p>
-              </div>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/schedule">{copy.viewAll}</Link>
-              </Button>
+        <div className="app-panel p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="section-title">{copy.alerts}</h3>
+              <p className="section-copy">
+                {copy.staffing}: {staffOnShift} people scheduled,{" "}
+                {totalHours.toFixed(1)}h {copy.labour.toLowerCase()}.
+              </p>
             </div>
-            <div className="mt-4 list-block">
-              {alerts.slice(0, 3).map((alert) => (
-                <div
-                  key={alert.id}
-                  className={`list-row ${alert.tone === "critical" ? "surface-danger" : alert.tone === "warning" ? "surface-warning" : "surface-info"}`}
-                >
-                  <div className="list-row-main">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-current" />
-                      <div className="list-row-title">{alert.title}</div>
-                    </div>
-                    <div className="list-row-copy">{alert.message}</div>
-                  </div>
-                  <Button asChild size="sm" variant="outline">
-                    <Link href="/logs">{copy.review}</Link>
-                  </Button>
-                </div>
-              ))}
-            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/schedule">{copy.viewAll}</Link>
+            </Button>
           </div>
+          <div className="mt-4 list-block">
+            {alerts.slice(0, 3).map((alert) => (
+              <div
+                key={alert.id}
+                className={`list-row ${alert.tone === "critical" ? "surface-danger" : alert.tone === "warning" ? "surface-warning" : "surface-info"}`}
+              >
+                <div className="list-row-main">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-current" />
+                    <div className="list-row-title">{alert.title}</div>
+                  </div>
+                  <div className="list-row-copy">{alert.message}</div>
+                </div>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/logs">{copy.review}</Link>
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
 
-          <div className="app-panel p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="section-title">{copy.activity}</h3>
-                <p className="section-copy">
-                  {lang === "sv"
-                    ? "Senaste synliga signaler från teamet."
-                    : "Latest visible signals from the team."}
-                </p>
-              </div>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/employees">{copy.viewAll}</Link>
-              </Button>
+        <div className="app-panel p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="section-title">{copy.activity}</h3>
+              <p className="section-copy">
+                {lang === "sv"
+                  ? "Senaste synliga signaler från teamet."
+                  : "Latest visible signals from the team."}
+              </p>
             </div>
-            <div className="mt-4 list-block">
-              {activity.map((item) => (
-                <div key={item.id} className="list-row">
-                  <div className="list-row-main">
-                    <div className="list-row-title">{item.title}</div>
-                    <div className="list-row-copy">{item.detail}</div>
-                  </div>
-                  <div
-                    className="text-xs text-slate-500"
-                    suppressHydrationWarning
-                  >
-                    {new Date(item.timestamp).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </div>
-              ))}
-              {activity.length === 0 && !loading && (
-                <div className="px-4 py-6 text-center text-sm text-slate-500">
-                  {lang === "sv" ? "Ingen aktivitet ännu." : "No activity yet."}
-                </div>
-              )}
-            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/employees">{copy.viewAll}</Link>
+            </Button>
           </div>
+          <div className="mt-4 list-block">
+            {activity.map((item) => (
+              <div key={item.id} className="list-row">
+                <div className="list-row-main">
+                  <div className="list-row-title">{item.title}</div>
+                  <div className="list-row-copy">{item.detail}</div>
+                </div>
+                <div
+                  className="text-xs text-slate-500"
+                  suppressHydrationWarning
+                >
+                  {new Date(item.timestamp).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+              </div>
+            ))}
+            {activity.length === 0 && !loading && (
+              <div className="px-4 py-6 text-center text-sm text-slate-500">
+                {lang === "sv" ? "Ingen aktivitet ännu." : "No activity yet."}
+              </div>
+            )}
+          </div>
+        </div>
       </section>
     </div>
   );

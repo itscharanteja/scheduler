@@ -153,6 +153,7 @@ export function useAIAgent({
               role: shift.role,
             })),
             weekStart: format(weekStart, "yyyy-MM-dd"),
+            locationId,
           }),
         });
         const payload = await response.json();
@@ -190,36 +191,52 @@ export function useAIAgent({
     [employees, existingShifts, prompt, weekStart]
   );
 
-  const applyGenerated = useCallback(async () => {
-    if (!result?.shifts.length || !isSupabaseConfigured) return;
+  const applyGenerated = useCallback(async (): Promise<string | null> => {
+    if (!result?.shifts.length || !isSupabaseConfigured) return null;
     setApplying(true);
     setError(null);
     setSuccess(null);
     try {
-      for (const shift of result.shifts) {
-        const employee = employees.find((item) => item.id === shift.employeeId);
-        await createShift({
-          employeeId: shift.employeeId,
-          date: shift.date,
-          startTime: shift.startTime,
-          endTime: shift.endTime,
-          role: shift.role,
-          locationId: employee?.locationId || locationId,
-          status: "draft",
-          createdByAi: true,
-        });
+      const results = await Promise.allSettled(
+        result.shifts.map((shift) => {
+          const employee = employees.find((item) => item.id === shift.employeeId);
+          return createShift({
+            employeeId: shift.employeeId,
+            date: shift.date,
+            startTime: shift.startTime,
+            endTime: shift.endTime,
+            role: shift.role,
+            locationId: employee?.locationId || locationId,
+            status: "draft",
+            createdByAi: true,
+          });
+        })
+      );
+
+      const saved = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.filter((r) => r.status === "rejected").length;
+
+      if (saved === 0) {
+        const firstError = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+        throw new Error(firstError?.reason?.message ?? "No shifts could be saved.");
       }
-      setSuccess("AI draft applied to schedule as draft shifts.");
-      toast.success("Shift added");
+
+      const msg = `${saved} shift${saved !== 1 ? "s" : ""} applied as draft.${failed > 0 ? ` ${failed} could not be saved.` : ""}`;
+      setSuccess(msg);
+      toast.success(`${saved} shift${saved !== 1 ? "s" : ""} applied`);
+      setResult(null);
       await reloadData();
+      return format(weekStart, "RRRR-'W'II");
     } catch (applyError) {
       console.error(applyError);
-      setError("Failed to apply generated shifts.");
+      const msg = applyError instanceof Error ? applyError.message : "Failed to apply generated shifts.";
+      setError(msg);
       toast.error("Failed to save — try again");
+      return null;
     } finally {
       setApplying(false);
     }
-  }, [employees, locationId, reloadData, result]);
+  }, [employees, locationId, reloadData, result, weekStart]);
 
   return {
     prompt,

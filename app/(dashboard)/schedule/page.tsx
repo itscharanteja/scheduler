@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   addDays,
@@ -12,11 +11,11 @@ import {
   setISOWeekYear,
   startOfWeek,
 } from "date-fns";
-import { AlertTriangle, ChevronLeft, ChevronRight, Plus, Sparkles } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Plus, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { LOCATION_ID } from "@/lib/constants";
@@ -29,27 +28,391 @@ import {
 } from "@/lib/supabase";
 import type { Employee, Shift, WeatherForecast } from "@/lib/types";
 
+// ─── Time / Gantt helpers ──────────────────────────────────────────────────────
+
 function parseWeekParam(weekParam: string | null): Date {
   const match = weekParam?.match(/^(\d{4})-W(\d{2})$/);
   if (!match) return startOfWeek(new Date(), { weekStartsOn: 1 });
   const year = parseInt(match[1], 10);
   const week = parseInt(match[2], 10);
-  const yearAdjusted = setISOWeekYear(new Date(), year);
-  const weekAdjusted = setISOWeek(yearAdjusted, week);
-  return startOfWeek(weekAdjusted, { weekStartsOn: 1 });
+  return startOfWeek(setISOWeek(setISOWeekYear(new Date(), year), week), { weekStartsOn: 1 });
 }
 
 function toWeekParam(date: Date): string {
-  const y = getISOWeekYear(date);
-  const w = getISOWeek(date);
-  return `${y}-W${w.toString().padStart(2, "0")}`;
+  return `${getISOWeekYear(date)}-W${getISOWeek(date).toString().padStart(2, "0")}`;
 }
 
-function shiftHours(startTime: string, endTime: string): number {
-  const [sh, sm] = startTime.split(":").map(Number);
-  const [eh, em] = endTime.split(":").map(Number);
+function shiftHours(start: string, end: string): number {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
   return (eh * 60 + em - (sh * 60 + sm)) / 60;
 }
+
+const HOUR_START = 6;
+const HOUR_END = 24;
+const TOTAL_MINS = (HOUR_END - HOUR_START) * 60;
+const HOUR_TICKS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
+
+function toLeftPct(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return Math.max(0, Math.min(100, ((h * 60 + m - HOUR_START * 60) / TOTAL_MINS) * 100));
+}
+
+function toWidthPct(start: string, end: string): number {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  return Math.max(0.5, (((eh * 60 + em) - (sh * 60 + sm)) / TOTAL_MINS) * 100);
+}
+
+// ─── Role palette ──────────────────────────────────────────────────────────────
+
+const ROLE_PALETTE: Record<string, { bg: string; text: string; border: string }> = {
+  service:     { bg: "#dbeafe", text: "#1d4ed8", border: "#93c5fd" },
+  shiftleader: { bg: "#d1fae5", text: "#065f46", border: "#6ee7b7" },
+  rutin:       { bg: "#fef3c7", text: "#b45309", border: "#fcd34d" },
+  sales:       { bg: "#dcfce7", text: "#15803d", border: "#86efac" },
+  reception:   { bg: "#fce7f3", text: "#9d174d", border: "#f9a8d4" },
+};
+
+function rolePalette(role: string) {
+  return ROLE_PALETTE[role.toLowerCase()] ?? { bg: "#ede9fe", text: "#4338ca", border: "#a5b4fc" };
+}
+
+// ─── Avatar helpers ───────────────────────────────────────────────────────────
+
+const AVATAR_COLORS = [
+  "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6",
+  "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#06B6D4",
+];
+
+function avatarColor(name: string): string {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffffff;
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+
+function initials(name: string): string {
+  return name.trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+}
+
+// ─── AI suggestion inline row ─────────────────────────────────────────────────
+
+function AiSuggestionRow({ weather, label }: { weather: WeatherForecast[]; label: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+      {/* Toggle button */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-slate-100"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-3.5 w-3.5 text-blue-500" />
+          <span className="text-[13px] font-semibold text-slate-700">{label}</span>
+          <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-600">
+            {weather.length}
+          </span>
+        </div>
+        <ChevronRight
+          className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200"
+          style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
+        />
+      </button>
+
+      {/* Expanded content */}
+      {open && (
+        <div className="border-t border-slate-200 divide-y divide-slate-100">
+          {weather.map((day) => (
+            <div key={day.forecastDate} className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold text-slate-800">
+                  {day.day} — {day.forecastDate}
+                </div>
+                <div className="mt-0.5 text-[12px] text-slate-500">{day.staffingSuggestion}</div>
+              </div>
+              <span className="shrink-0 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                {day.temperatureHigh}°
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Filter popover ──────────────────────────────────────────────────────────
+
+function FilterPopover({
+  employees,
+  filterEmployeeIds,
+  filterRoles,
+  onToggleEmployee,
+  onToggleRole,
+  onClear,
+}: {
+  employees: Employee[];
+  filterEmployeeIds: Set<string>;
+  filterRoles: Set<string>;
+  onToggleEmployee: (id: string) => void;
+  onToggleRole: (role: string) => void;
+  onClear: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const activeCount = filterEmployeeIds.size + filterRoles.size;
+
+  const visibleEmployees = search.trim()
+    ? employees.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()))
+    : employees;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="relative gap-1.5"
+          style={activeCount > 0 ? { borderColor: "#94a3b8", background: "#f8fafc" } : undefined}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Filters
+          {activeCount > 0 && (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-800 text-[10px] font-bold text-white">
+              {activeCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72" align="end">
+        {/* Header */}
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-[13px] font-semibold text-slate-800">Filters</span>
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="flex items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-slate-800"
+            >
+              <X className="h-3 w-3" />
+              Clear all
+            </button>
+          )}
+        </div>
+
+        {/* Role section */}
+        <div className="mb-4">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Role</p>
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(ROLE_PALETTE).map(([role, pal]) => {
+              const active = filterRoles.has(role);
+              return (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => onToggleRole(role)}
+                  className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize transition-all"
+                  style={
+                    active
+                      ? { backgroundColor: pal.bg, color: pal.text, borderColor: pal.border }
+                      : { backgroundColor: "#f8fafc", color: "#94a3b8", borderColor: "#e2e8f0" }
+                  }
+                >
+                  {active && <span className="mr-1">✓</span>}
+                  {role}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="mb-3 border-t border-slate-100" />
+
+        {/* Person section */}
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Person</p>
+          {employees.length > 6 && (
+            <input
+              type="text"
+              placeholder="Search people…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="mb-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white"
+            />
+          )}
+          <div className="max-h-44 overflow-y-auto">
+            {visibleEmployees.length === 0 ? (
+              <p className="py-3 text-center text-[12px] text-slate-400">No results</p>
+            ) : (
+              visibleEmployees.map((emp) => {
+                const checked = filterEmployeeIds.has(emp.id);
+                const bg = avatarColor(emp.name);
+                return (
+                  <label
+                    key={emp.id}
+                    className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => onToggleEmployee(emp.id)}
+                      className="h-3.5 w-3.5 rounded accent-slate-800"
+                    />
+                    <div
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+                      style={{ backgroundColor: bg }}
+                    >
+                      {initials(emp.name)}
+                    </div>
+                    <span className="flex-1 text-[13px] text-slate-700">{emp.name}</span>
+                    <span className="text-[11px] capitalize text-slate-400">{emp.role}</span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Gantt row ────────────────────────────────────────────────────────────────
+
+function GanttRow({
+  employee,
+  dayShifts,
+  canEdit,
+  selectedDay,
+  employees,
+  onCreated,
+  onUpdated,
+  onDeleted,
+}: {
+  employee: Employee;
+  dayShifts: Shift[];
+  canEdit: boolean;
+  selectedDay: string;
+  employees: Employee[];
+  onCreated: (form: ShiftForm) => Promise<void>;
+  onUpdated: (shiftId: string, form: ShiftForm) => Promise<void>;
+  onDeleted: (shiftId: string) => Promise<void>;
+}) {
+  const bg = avatarColor(employee.name);
+  const inits = initials(employee.name);
+  const hasShifts = dayShifts.length > 0;
+
+  return (
+    <div
+      className="flex items-stretch border-b border-slate-100 last:border-0"
+      style={{ opacity: hasShifts ? 1 : 0.55 }}
+    >
+      {/* Employee label column */}
+      <div className="flex shrink-0 items-center gap-2.5 border-r border-slate-100 bg-white px-4 py-2"
+        style={{ width: 220, minWidth: 220 }}>
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+          style={{ backgroundColor: bg }}
+        >
+          {inits}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-semibold text-slate-800">{employee.name}</div>
+          <div className="truncate text-[11px] capitalize text-slate-400">{employee.role}</div>
+        </div>
+        {canEdit && (
+          <ShiftPopover
+            trigger={
+              <button
+                type="button"
+                className="shrink-0 rounded-full p-1 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                title="Add shift"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            }
+            title={`Add shift — ${employee.name}`}
+            employees={employees}
+            defaultForm={{ employeeId: employee.id, date: selectedDay, startTime: "10:00", endTime: "18:00", role: employee.role ?? "service" }}
+            onSave={onCreated}
+          />
+        )}
+      </div>
+
+      {/* Timeline column */}
+      <div className="relative flex-1 bg-slate-50" style={{ height: 56 }}>
+        {/* Hour grid lines */}
+        {HOUR_TICKS.map((h) => (
+          <div
+            key={h}
+            className="absolute inset-y-0 border-l border-slate-200"
+            style={{ left: `${((h - HOUR_START) / (HOUR_END - HOUR_START)) * 100}%` }}
+          />
+        ))}
+
+        {/* Shift bars */}
+        {dayShifts.map((shift) => {
+          const pal = rolePalette(shift.role);
+          const left = toLeftPct(shift.startTime);
+          const width = toWidthPct(shift.startTime, shift.endTime);
+          const barContent = (
+            <div
+              className="absolute flex items-center overflow-hidden rounded-md px-2 text-[11px] font-semibold"
+              style={{
+                top: 8,
+                bottom: 8,
+                left: `${left}%`,
+                width: `${width}%`,
+                backgroundColor: pal.bg,
+                color: pal.text,
+                border: `1px solid ${pal.border}`,
+              }}
+            >
+              <span className="truncate">
+                {shift.role}&nbsp;·&nbsp;{shift.startTime.slice(0, 5)}–{shift.endTime.slice(0, 5)}
+              </span>
+            </div>
+          );
+
+          if (!canEdit) return <React.Fragment key={shift.id}>{barContent}</React.Fragment>;
+
+          return (
+            <ShiftPopover
+              key={shift.id}
+              trigger={
+                <button
+                  type="button"
+                  className="absolute transition-opacity hover:opacity-75"
+                  style={{ top: 8, bottom: 8, left: `${left}%`, width: `${width}%` }}
+                  title={`${employee.name}: ${shift.startTime.slice(0, 5)}–${shift.endTime.slice(0, 5)} · ${shift.role}`}
+                >
+                  <div
+                    className="flex h-full w-full items-center overflow-hidden rounded-md px-2 text-[11px] font-semibold"
+                    style={{ backgroundColor: pal.bg, color: pal.text, border: `1px solid ${pal.border}` }}
+                  >
+                    <span className="truncate">
+                      {shift.role}&nbsp;·&nbsp;{shift.startTime.slice(0, 5)}–{shift.endTime.slice(0, 5)}
+                    </span>
+                  </div>
+                </button>
+              }
+              title={`Edit shift — ${employee.name}`}
+              employees={employees}
+              editingShiftId={shift.id}
+              defaultForm={{ employeeId: shift.employeeId, date: shift.date, startTime: shift.startTime, endTime: shift.endTime, role: shift.role }}
+              onSave={(form) => onUpdated(shift.id, form)}
+              onDelete={() => onDeleted(shift.id)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type ShiftForm = {
   employeeId: string;
@@ -59,19 +422,106 @@ type ShiftForm = {
   role: string;
 };
 
-const emptyForm: ShiftForm = {
-  employeeId: "",
-  date: "",
-  startTime: "10:00",
-  endTime: "18:00",
-  role: "service",
-};
+// ─── Shift form popover ───────────────────────────────────────────────────────
 
-function shiftStatusClass(shift: Shift) {
-  if (shift.createdByAi) return "status-info";
-  if (shift.status === "published") return "status-success";
-  return "status-neutral";
+function ShiftPopover({
+  trigger,
+  title,
+  employees,
+  defaultForm,
+  editingShiftId = null,
+  onSave,
+  onDelete,
+}: {
+  trigger: React.ReactNode;
+  title: string;
+  employees: Employee[];
+  defaultForm: ShiftForm;
+  editingShiftId?: string | null;
+  onSave: (form: ShiftForm) => Promise<void>;
+  onDelete?: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<ShiftForm>(defaultForm);
+  const [saving, setSaving] = useState(false);
+
+  function handleOpenChange(next: boolean) {
+    if (next) setForm(defaultForm);
+    setOpen(next);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await onSave(form);
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!onDelete) return;
+    setSaving(true);
+    try {
+      await onDelete();
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent className="w-72" align="start">
+        <p className="mb-3 text-[13px] font-semibold text-slate-800">{title}</p>
+        <div className="grid gap-2">
+          <select
+            value={form.employeeId}
+            onChange={(e) => {
+              const emp = employees.find((em) => em.id === e.target.value);
+              setForm((prev) => ({ ...prev, employeeId: e.target.value, role: emp?.role ?? prev.role }));
+            }}
+            className="filter-input text-sm"
+          >
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>{emp.name}</option>
+            ))}
+          </select>
+          <Input type="date" value={form.date} className="h-10 text-sm" onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))} />
+          <div className="grid grid-cols-2 gap-2">
+            <Input type="time" value={form.startTime} className="h-10 text-sm" onChange={(e) => setForm((prev) => ({ ...prev, startTime: e.target.value }))} />
+            <Input type="time" value={form.endTime} className="h-10 text-sm" onChange={(e) => setForm((prev) => ({ ...prev, endTime: e.target.value }))} />
+          </div>
+          <select
+            value={form.role}
+            onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
+            className="filter-input text-sm"
+          >
+            <option value="service">Service</option>
+            <option value="shiftleader">Shift leader</option>
+            <option value="rutin">Rutin</option>
+            <option value="sales">Sales</option>
+            <option value="reception">Reception</option>
+          </select>
+        </div>
+        <div className="mt-3 flex items-center justify-end gap-2">
+          {editingShiftId && onDelete && (
+            <Button size="sm" variant="outline" disabled={saving} onClick={() => void handleDelete()}>
+              Delete
+            </Button>
+          )}
+          <Button size="sm" disabled={saving} onClick={() => void handleSave()}>
+            {editingShiftId ? "Save" : "Add shift"}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 function SchedulePageContent() {
   const { lang } = useLanguage();
@@ -79,435 +529,389 @@ function SchedulePageContent() {
   const canEdit = hasRole("admin", "super_admin");
   const router = useRouter();
   const searchParams = useSearchParams();
+
   const weekStart = useMemo(() => parseWeekParam(searchParams.get("week")), [searchParams]);
-  const tab = searchParams.get("tab") === "day" ? "day" : "week";
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const dayParam = searchParams.get("date");
+  // Default to today, not week-start Monday
+  const selectedDay = dayParam ?? todayStr;
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [weather, setWeather] = useState<WeatherForecast[]>([]);
   const [loading, setLoading] = useState(true);
-  const [formOpen, setFormOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
-  const [form, setForm] = useState<ShiftForm>(emptyForm);
 
-  const dayParam = searchParams.get("date");
-  const selectedDay = dayParam ?? format(weekStart, "yyyy-MM-dd");
+  // Filter state
+  const [filterEmployeeIds, setFilterEmployeeIds] = useState<Set<string>>(new Set());
+  const [filterRoles, setFilterRoles] = useState<Set<string>>(new Set());
 
-  const text =
-    lang === "sv"
-      ? {
-          addShift: "Lägg till pass",
-          save: "Spara pass",
-          delete: "Ta bort pass",
-          coverage: "Täckning",
-          conflicts: "Konflikter",
-          hours: "Planerade timmar",
-          gaps: "Bemanningsluckor",
-          week: "Vecka",
-          day: "Dag",
-          ai: "AI-förslag",
-        }
-      : {
-          addShift: "Add shift",
-          save: "Save shift",
-          delete: "Delete shift",
-          coverage: "Coverage",
-          conflicts: "Conflicts",
-          hours: "Planned hours",
-          gaps: "Coverage gaps",
-          week: "Week",
-          day: "Day",
-          ai: "AI suggestion",
-        };
+  function toggleEmployeeFilter(id: string) {
+    setFilterEmployeeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleRoleFilter(role: string) {
+    setFilterRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role); else next.add(role);
+      return next;
+    });
+  }
+
+  function clearFilters() {
+    setFilterEmployeeIds(new Set());
+    setFilterRoles(new Set());
+  }
+
+  const t = lang === "sv"
+    ? { addShift: "Lägg till pass", save: "Spara pass", delete: "Ta bort pass", hours: "Planerade timmar", conflicts: "Konflikter", gaps: "Bemanningsluckor", week: "Vecka", ai: "AI-förslag", noShifts: "Inga pass planerade." }
+    : { addShift: "Add shift", save: "Save shift", delete: "Delete shift", hours: "Planned hours", conflicts: "Conflicts", gaps: "Coverage gaps", week: "Week", ai: "AI suggestion", noShifts: "No shifts planned." };
 
   useEffect(() => {
     let active = true;
     (async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        const [employeeRows, schedule, weatherRes] = await Promise.all([
+        const [emps, schedule, weatherRes] = await Promise.all([
           getEmployees(),
           getShiftsByWeek(weekStart, LOCATION_ID),
           fetch(`/api/weather?locationId=${LOCATION_ID}`).then((r) => r.json()).catch(() => ({ forecasts: [] })),
         ]);
         if (!active) return;
-        setEmployees(employeeRows);
+        setEmployees(emps);
         setShifts(schedule.shifts);
         setWeather(Array.isArray(weatherRes.forecasts) ? weatherRes.forecasts.slice(0, 3) : []);
       } finally {
         if (active) setLoading(false);
       }
     })();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [weekStart]);
 
-  const weekDays = useMemo(
-    () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
-    [weekStart]
-  );
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
   const shiftsByDay = useMemo(() => {
     const map = new Map<string, Shift[]>();
-    for (const shift of shifts) {
-      const existing = map.get(shift.date) ?? [];
-      existing.push(shift);
-      map.set(shift.date, existing.sort((a, b) => a.startTime.localeCompare(b.startTime)));
+    for (const s of shifts) {
+      const existing = map.get(s.date) ?? [];
+      existing.push(s);
+      map.set(s.date, existing.sort((a, b) => a.startTime.localeCompare(b.startTime)));
     }
     return map;
   }, [shifts]);
 
   const selectedDayShifts = shiftsByDay.get(selectedDay) ?? [];
-  const totalHours = shifts.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0);
+  const totalHours = shifts.reduce((sum, s) => sum + shiftHours(s.startTime, s.endTime), 0);
+
   const dayConflicts = useMemo(() => {
     let count = 0;
     for (const day of weekDays) {
-      const dayKey = format(day, "yyyy-MM-dd");
-      const dayShifts = (shiftsByDay.get(dayKey) ?? []).slice().sort((a, b) => `${a.employeeId}${a.startTime}`.localeCompare(`${b.employeeId}${b.startTime}`));
+      const dayShifts = (shiftsByDay.get(format(day, "yyyy-MM-dd")) ?? [])
+        .slice().sort((a, b) => `${a.employeeId}${a.startTime}`.localeCompare(`${b.employeeId}${b.startTime}`));
       for (let i = 1; i < dayShifts.length; i++) {
-        const previous = dayShifts[i - 1];
-        const current = dayShifts[i];
-        if (previous.employeeId === current.employeeId && previous.endTime > current.startTime) {
-          count += 1;
-        }
+        if (dayShifts[i - 1].employeeId === dayShifts[i].employeeId && dayShifts[i - 1].endTime > dayShifts[i].startTime) count++;
       }
     }
     return count;
   }, [shiftsByDay, weekDays]);
 
   const coverageGaps = weekDays.filter((day) => {
-    const dayKey = format(day, "yyyy-MM-dd");
-    const dayShifts = shiftsByDay.get(dayKey) ?? [];
-    const hasLeader = dayShifts.some((shift) => shift.role === "shiftleader");
-    return !hasLeader || dayShifts.length < 4;
+    const ds = shiftsByDay.get(format(day, "yyyy-MM-dd")) ?? [];
+    return !ds.some((s) => s.role === "shiftleader") || ds.length < 4;
   }).length;
 
   function updateQuery(next: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
-    Object.entries(next).forEach(([key, value]) => params.set(key, value));
+    Object.entries(next).forEach(([k, v]) => params.set(k, v));
     router.push(`/schedule?${params.toString()}`);
   }
 
-  function openCreate(day: string) {
-    setEditingShiftId(null);
-    setForm({
-      employeeId: employees[0]?.id ?? "",
-      date: day,
-      startTime: "10:00",
-      endTime: "18:00",
-      role: employees[0]?.role ?? "service",
-    });
-    setFormOpen(true);
+  async function handleCreate(form: ShiftForm) {
+    const emp = employees.find((e) => e.id === form.employeeId);
+    const created = await createShift({ employeeId: form.employeeId, date: form.date, startTime: form.startTime, endTime: form.endTime, role: form.role, locationId: emp?.locationId ?? LOCATION_ID, status: "draft" });
+    setShifts((prev) => [...prev, created]);
+    toast.success("Shift added");
   }
 
-  function openEdit(shift: Shift) {
-    setEditingShiftId(shift.id);
-    setForm({
-      employeeId: shift.employeeId,
-      date: shift.date,
-      startTime: shift.startTime,
-      endTime: shift.endTime,
-      role: shift.role,
-    });
-    setFormOpen(true);
+  async function handleUpdate(shiftId: string, form: ShiftForm) {
+    const updated = await updateShift(shiftId, { employeeId: form.employeeId, date: form.date, startTime: form.startTime, endTime: form.endTime, role: form.role });
+    setShifts((prev) => prev.map((s) => (s.id === shiftId ? updated : s)));
+    toast.success("Shift updated");
   }
 
-  async function saveShift() {
-    if (!form.employeeId) return;
-    setSaving(true);
-    try {
-      if (editingShiftId) {
-        const updated = await updateShift(editingShiftId, {
-          employeeId: form.employeeId,
-          date: form.date,
-          startTime: form.startTime,
-          endTime: form.endTime,
-          role: form.role,
-        });
-        setShifts((prev) => prev.map((shift) => (shift.id === editingShiftId ? updated : shift)));
-        toast.success("Shift updated");
-      } else {
-        const employee = employees.find((item) => item.id === form.employeeId);
-        const created = await createShift({
-          employeeId: form.employeeId,
-          date: form.date,
-          startTime: form.startTime,
-          endTime: form.endTime,
-          role: form.role,
-          locationId: employee?.locationId ?? LOCATION_ID,
-          status: "draft",
-        });
-        setShifts((prev) => [...prev, created]);
-        toast.success("Shift added");
-      }
-      setFormOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Could not save shift");
-    } finally {
-      setSaving(false);
+  async function handleDelete(shiftId: string) {
+    await deleteShift(shiftId);
+    setShifts((prev) => prev.filter((s) => s.id !== shiftId));
+    toast.success("Shift deleted");
+  }
+
+  // Base list: employees who have at least one shift this week
+  const weekEmployees = useMemo(() => {
+    const withShiftsThisWeek = new Set(shifts.map((s) => s.employeeId));
+    const withShiftsToday = new Set(selectedDayShifts.map((s) => s.employeeId));
+    return employees
+      .filter((e) => withShiftsThisWeek.has(e.id))
+      .sort((a, b) => {
+        const aToday = withShiftsToday.has(a.id);
+        const bToday = withShiftsToday.has(b.id);
+        if (aToday && !bToday) return -1;
+        if (!aToday && bToday) return 1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [employees, shifts, selectedDayShifts]);
+
+  // Apply employee filter
+  const sortedEmployees = useMemo(() => {
+    if (filterEmployeeIds.size === 0) return weekEmployees;
+    return weekEmployees.filter((e) => filterEmployeeIds.has(e.id));
+  }, [weekEmployees, filterEmployeeIds]);
+
+  // Shifts for selected day, grouped by employee, with role filter applied
+  const selectedDayShiftsByEmployee = useMemo(() => {
+    const map = new Map<string, Shift[]>();
+    for (const s of selectedDayShifts) {
+      if (filterRoles.size > 0 && !filterRoles.has(s.role)) continue;
+      const existing = map.get(s.employeeId) ?? [];
+      existing.push(s);
+      map.set(s.employeeId, existing);
     }
-  }
+    return map;
+  }, [selectedDayShifts, filterRoles]);
 
-  async function removeShift() {
-    if (!editingShiftId) return;
-    setSaving(true);
-    try {
-      await deleteShift(editingShiftId);
-      setShifts((prev) => prev.filter((shift) => shift.id !== editingShiftId));
-      setFormOpen(false);
-      toast.success("Shift deleted");
-    } catch (error) {
-      console.error(error);
-      toast.error("Could not delete shift");
-    } finally {
-      setSaving(false);
-    }
-  }
+  const dayTotalHours = selectedDayShifts.reduce((sum, s) => sum + shiftHours(s.startTime, s.endTime), 0);
 
   return (
-    <div className="space-y-6">
-      <section className={canEdit ? "grid gap-4 xl:grid-cols-[1.15fr_0.85fr]" : ""}>
-        <div className="app-panel p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="toolbar-row">
-              <Button variant="outline" size="sm" onClick={() => updateQuery({ week: toWeekParam(addDays(weekStart, -7)) })}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="status-chip status-neutral">
-                {text.week} {getISOWeek(weekStart)} • {format(weekStart, "d MMM")} - {format(addDays(weekStart, 6), "d MMM")}
-              </div>
-              <Button variant="outline" size="sm" onClick={() => updateQuery({ week: toWeekParam(addDays(weekStart, 7)) })}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+    <div className="space-y-4">
+      {/* ── Header panel ── */}
+      <div className="app-panel p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="toolbar-row">
+            <Button variant="outline" size="sm" onClick={() => {
+              const prev = addDays(weekStart, -7);
+              updateQuery({ week: toWeekParam(prev), date: format(prev, "yyyy-MM-dd") });
+            }}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="status-chip status-neutral">
+              {t.week} {getISOWeek(weekStart)} · {format(weekStart, "d MMM")} – {format(addDays(weekStart, 6), "d MMM")}
             </div>
-            <div className="toolbar-row">
-              <Button variant={tab === "week" ? "default" : "outline"} size="sm" onClick={() => updateQuery({ tab: "week" })}>
-                {text.week}
-              </Button>
-              <Button variant={tab === "day" ? "default" : "outline"} size="sm" onClick={() => updateQuery({ tab: "day", date: selectedDay })}>
-                {text.day}
-              </Button>
-              {canEdit && (
-                <Button onClick={() => openCreate(selectedDay)}>
-                  <Plus className="h-4 w-4" />
-                  {text.addShift}
-                </Button>
-              )}
+            <Button variant="outline" size="sm" onClick={() => {
+              const next = addDays(weekStart, 7);
+              updateQuery({ week: toWeekParam(next), date: format(next, "yyyy-MM-dd") });
+            }}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="toolbar-row">
+            <FilterPopover
+              employees={weekEmployees}
+              filterEmployeeIds={filterEmployeeIds}
+              filterRoles={filterRoles}
+              onToggleEmployee={toggleEmployeeFilter}
+              onToggleRole={toggleRoleFilter}
+              onClear={clearFilters}
+            />
+            {canEdit && (
+              <ShiftPopover
+                trigger={
+                  <Button>
+                    <Plus className="h-4 w-4" />
+                    {t.addShift}
+                  </Button>
+                }
+                title={t.addShift}
+                employees={employees}
+                defaultForm={{ employeeId: employees[0]?.id ?? "", date: selectedDay, startTime: "10:00", endTime: "18:00", role: employees[0]?.role ?? "service" }}
+                onSave={handleCreate}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Day strip */}
+        <div className="mt-4 flex gap-1 overflow-x-auto pb-1">
+          {weekDays.map((day) => {
+            const key = format(day, "yyyy-MM-dd");
+            const isSelected = key === selectedDay;
+            const isToday = key === todayStr;
+            const dayShiftCount = (shiftsByDay.get(key) ?? []).length;
+            const hasGap = !(shiftsByDay.get(key) ?? []).some((s) => s.role === "shiftleader") || dayShiftCount < 4;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => updateQuery({ date: key, week: toWeekParam(weekStart) })}
+                className={`flex min-w-[58px] flex-col items-center rounded-xl px-2.5 py-2 transition-colors ${
+                  isSelected ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <span className={`text-[11px] font-medium ${isSelected ? "text-slate-400" : "text-slate-400"}`}>
+                  {format(day, "EEE")}
+                </span>
+                <span className={`mt-0.5 text-[15px] font-bold ${isToday && !isSelected ? "text-blue-600" : ""}`}>
+                  {format(day, "d")}
+                </span>
+                <div className="mt-1.5 flex items-center gap-0.5">
+                  {dayShiftCount > 0
+                    ? Array.from({ length: Math.min(dayShiftCount, 4) }).map((_, idx) => (
+                        <div key={idx} className={`h-1 w-1 rounded-full ${isSelected ? "bg-white/60" : "bg-slate-400"}`} />
+                      ))
+                    : <div className={`h-1 w-1 rounded-full ${isSelected ? "bg-white/20" : "bg-slate-200"}`} />}
+                </div>
+                {hasGap && !isSelected && (
+                  <AlertTriangle className="mt-1 h-2.5 w-2.5 text-amber-400" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Stats row */}
+        {canEdit && (
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="metric-card">
+              <div className="metric-label">{t.hours}</div>
+              <div className="metric-value">{totalHours.toFixed(1)}h</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">{t.conflicts}</div>
+              <div className="metric-value">{dayConflicts}</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">{t.gaps}</div>
+              <div className="metric-value">{coverageGaps}</div>
             </div>
           </div>
+        )}
 
-          {canEdit && (
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
-              <div className="metric-card">
-                <div className="metric-label">{text.hours}</div>
-                <div className="metric-value">{totalHours.toFixed(1)}h</div>
-              </div>
-              <div className="metric-card">
-                <div className="metric-label">{text.conflicts}</div>
-                <div className="metric-value">{dayConflicts}</div>
-              </div>
-              <div className="metric-card">
-                <div className="metric-label">{text.gaps}</div>
-                <div className="metric-value">{coverageGaps}</div>
-              </div>
+        {/* AI suggestion — collapsed by default, expands inline */}
+        {canEdit && weather.length > 0 && <AiSuggestionRow weather={weather} label={t.ai} />}
+      </div>
+
+      {/* ── Gantt chart ── */}
+      <div className="app-panel overflow-hidden">
+        {/* Gantt header */}
+        <div className="border-b border-slate-100 px-5 py-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="section-title">{format(new Date(`${selectedDay}T00:00:00`), "EEEE, d MMMM")}</h2>
+              {!loading && (
+                <p className="section-copy mt-0.5">
+                  {selectedDayShifts.length} {selectedDayShifts.length === 1 ? "shift" : "shifts"} · {dayTotalHours.toFixed(1)}h total
+                </p>
+              )}
+            </div>
+            {/* Role legend */}
+            <div className="hidden items-center gap-2 sm:flex">
+              {Object.entries(ROLE_PALETTE).map(([role, pal]) => (
+                <span
+                  key={role}
+                  className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize"
+                  style={{ backgroundColor: pal.bg, color: pal.text, borderColor: pal.border }}
+                >
+                  {role}
+                </span>
+              ))}
+            </div>
+          </div>
+          {/* Active filter chips */}
+          {(filterEmployeeIds.size > 0 || filterRoles.size > 0) && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-slate-400">Showing:</span>
+              {Array.from(filterEmployeeIds).map((id) => {
+                const emp = employees.find((e) => e.id === id);
+                if (!emp) return null;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => toggleEmployeeFilter(id)}
+                    className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-200"
+                  >
+                    {emp.name}
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                );
+              })}
+              {Array.from(filterRoles).map((role) => {
+                const pal = ROLE_PALETTE[role] ?? { bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" };
+                return (
+                  <button
+                    key={role}
+                    type="button"
+                    onClick={() => toggleRoleFilter(role)}
+                    className="flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize"
+                    style={{ backgroundColor: pal.bg, color: pal.text, borderColor: pal.border }}
+                  >
+                    {role}
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {canEdit && (
-          <div className="app-panel p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="section-title">{text.ai}</h2>
-                <p className="section-copy">
-                  {lang === "sv"
-                    ? "AI-förslag ska ligga nära schemat, inte gömmas långt bort."
-                    : "AI recommendations should sit next to the schedule, not hide elsewhere."}
-                </p>
+        {loading ? (
+          <div className="py-14 text-center text-sm text-slate-400">Loading schedule…</div>
+        ) : (
+          <div className="overflow-x-auto">
+            {/* Time header row */}
+            <div className="flex border-b border-slate-200 bg-slate-50/80" style={{ minWidth: 820 }}>
+              <div className="shrink-0 border-r border-slate-100 px-4 py-2" style={{ width: 220, minWidth: 220 }}>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Employee</span>
               </div>
-              <span className="status-chip status-info">
-                <Sparkles className="h-3.5 w-3.5" />
-                AI
-              </span>
-            </div>
-            <div className="mt-4 list-block">
-              {weather.length === 0 ? (
-                <div className="px-4 py-4 text-sm text-slate-500">
-                  {lang === "sv" ? "Ingen väderdata tillgänglig." : "No weather data available."}
-                </div>
-              ) : (
-                weather.map((day) => (
-                  <div key={day.forecastDate} className="list-row">
-                    <div className="list-row-main">
-                      <div className="list-row-title">{day.day} — {day.forecastDate}</div>
-                      <div className="list-row-copy">{day.staffingSuggestion}</div>
-                    </div>
-                    <span className="status-chip status-neutral">{day.temperatureHigh}°</span>
+              <div className="relative flex-1" style={{ height: 28 }}>
+                {HOUR_TICKS.map((h) => (
+                  <div
+                    key={h}
+                    className="absolute top-0 flex h-full items-center"
+                    style={{ left: `${((h - HOUR_START) / (HOUR_END - HOUR_START)) * 100}%` }}
+                  >
+                    <span className="pl-1 text-[10px] text-slate-400">
+                      {String(h).padStart(2, "0")}:00
+                    </span>
                   </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Employee rows */}
+            <div style={{ minWidth: 820 }}>
+              {sortedEmployees.length === 0 ? (
+                <div className="py-14 text-center text-sm text-slate-400">{t.noShifts}</div>
+              ) : (
+                sortedEmployees.map((emp) => (
+                  <GanttRow
+                    key={emp.id}
+                    employee={emp}
+                    dayShifts={selectedDayShiftsByEmployee.get(emp.id) ?? []}
+                    canEdit={canEdit}
+                    selectedDay={selectedDay}
+                    employees={employees}
+                    onCreated={handleCreate}
+                    onUpdated={handleUpdate}
+                    onDeleted={handleDelete}
+                  />
                 ))
               )}
             </div>
           </div>
         )}
-      </section>
+      </div>
 
-      {tab === "week" ? (
-        <section className="app-panel overflow-hidden">
-          <div className="grid gap-px bg-slate-200 xl:grid-cols-7">
-            {weekDays.map((day) => {
-              const dayKey = format(day, "yyyy-MM-dd");
-              const dayShifts = shiftsByDay.get(dayKey) ?? [];
-              const gap = !dayShifts.some((shift) => shift.role === "shiftleader") || dayShifts.length < 4;
-              return (
-                <div key={dayKey} className="bg-white p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-950">{format(day, "EEE d MMM")}</div>
-                      <div className="mt-1 text-xs text-slate-500">{dayShifts.length} shifts</div>
-                    </div>
-                    {gap ? (
-                      <span className="status-chip status-warning">
-                        <AlertTriangle className="h-3.5 w-3.5" />
-                        Gap
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-4 list-block">
-                    {dayShifts.map((shift) =>
-                      canEdit ? (
-                        <button key={shift.id} type="button" className="list-row text-left" onClick={() => openEdit(shift)}>
-                          <div className="list-row-main">
-                            <div className="list-row-title">{shift.employeeName || shift.employeeId}</div>
-                            <div className="list-row-copy">{shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)} • {shift.role}</div>
-                          </div>
-                          <span className={`status-chip ${shiftStatusClass(shift)}`}>{shift.status}</span>
-                        </button>
-                      ) : (
-                        <div key={shift.id} className="list-row">
-                          <div className="list-row-main">
-                            <div className="list-row-title">{shift.employeeName || shift.employeeId}</div>
-                            <div className="list-row-copy">{shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)} • {shift.role}</div>
-                          </div>
-                          <span className={`status-chip ${shiftStatusClass(shift)}`}>{shift.status}</span>
-                        </div>
-                      )
-                    )}
-                    {canEdit && (
-                      <Button variant="outline" size="sm" className="w-full" onClick={() => openCreate(dayKey)}>
-                        <Plus className="h-4 w-4" />
-                        {text.addShift}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : (
-        <section className="app-panel p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="section-title">{format(new Date(`${selectedDay}T00:00:00`), "EEEE d MMMM")}</h2>
-              <p className="section-copy">
-                {lang === "sv"
-                  ? "Fokuserad dagsvy för snabba ändringar och bemanningskontroll."
-                  : "Focused day view for quick changes and coverage checks."}
-              </p>
-            </div>
-            <Input
-              type="date"
-              value={selectedDay}
-              onChange={(event) => updateQuery({ tab: "day", date: event.target.value, week: toWeekParam(startOfWeek(new Date(`${event.target.value}T00:00:00`), { weekStartsOn: 1 })) })}
-              className="w-[180px]"
-            />
-          </div>
-          <div className="mt-4 list-block">
-            {loading ? (
-              <div className="app-panel-muted px-4 py-8 text-sm text-slate-600">Loading schedule...</div>
-            ) : selectedDayShifts.length === 0 ? (
-              <div className="app-panel-muted px-4 py-10 text-center text-sm text-slate-600">No shifts planned for this day.</div>
-            ) : (
-              selectedDayShifts.map((shift) => (
-                <div key={shift.id} className="list-row">
-                  <div className="list-row-main">
-                    <div className="list-row-title">{shift.employeeName}</div>
-                    <div className="list-row-copy">{shift.startTime.slice(0, 5)}-{shift.endTime.slice(0, 5)} • {shift.role}</div>
-                  </div>
-                  <div className="toolbar-row">
-                    <span className={`status-chip ${shiftStatusClass(shift)}`}>{shift.status}</span>
-                    {canEdit && (
-                      <Button size="sm" variant="outline" onClick={() => openEdit(shift)}>Edit</Button>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-      )}
 
-      {canEdit && <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editingShiftId ? "Edit shift" : text.addShift}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <select
-              value={form.employeeId}
-              onChange={(event) => {
-                const employee = employees.find((item) => item.id === event.target.value);
-                setForm((prev) => ({
-                  ...prev,
-                  employeeId: event.target.value,
-                  role: employee?.role ?? prev.role,
-                }));
-              }}
-              className="filter-input"
-            >
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.name}
-                </option>
-              ))}
-            </select>
-            <Input type="date" value={form.date} onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))} />
-            <div className="grid grid-cols-2 gap-3">
-              <Input type="time" value={form.startTime} onChange={(event) => setForm((prev) => ({ ...prev, startTime: event.target.value }))} />
-              <Input type="time" value={form.endTime} onChange={(event) => setForm((prev) => ({ ...prev, endTime: event.target.value }))} />
-            </div>
-            <select
-              value={form.role}
-              onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}
-              className="filter-input"
-            >
-              <option value="service">Service</option>
-              <option value="shiftleader">Shift leader</option>
-              <option value="rutin">Rutin</option>
-            </select>
-          </div>
-          <DialogFooter className="gap-2">
-            {editingShiftId ? (
-              <Button variant="outline" onClick={() => void removeShift()} disabled={saving}>
-                {text.delete}
-              </Button>
-            ) : null}
-            <Button onClick={() => void saveShift()} disabled={saving}>
-              {text.save}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>}
+
     </div>
   );
 }
 
 export default function SchedulePage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div>Loading…</div>}>
       <SchedulePageContent />
     </Suspense>
   );
