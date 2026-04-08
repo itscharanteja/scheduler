@@ -19,7 +19,7 @@ function generateSlug(name: string): string {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
-    const { locationId, name, description, isAnnouncement } = body;
+    const { locationId, name, description, isAnnouncement, createdBy } = body;
 
     if (!locationId || !name) {
       return NextResponse.json(
@@ -45,6 +45,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         slug,
         description: description || null,
         is_announcement: isAnnouncement || false,
+        created_by: createdBy || null,
       })
       .select("*")
       .single();
@@ -70,6 +71,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       description: string | null;
       is_announcement: boolean;
       created_at: string;
+      created_by: string | null;
     };
 
     const channel: ChatChannel = {
@@ -80,6 +82,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       description: row.description || undefined,
       isAnnouncement: row.is_announcement,
       createdAt: row.created_at,
+      createdBy: row.created_by ?? undefined,
     };
 
     return NextResponse.json(

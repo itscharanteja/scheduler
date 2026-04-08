@@ -156,6 +156,7 @@ export interface ChatChannel {
   description?: string;
   isAnnouncement: boolean;
   createdAt: string;
+  createdBy?: string;
   unreadCount?: number;
   participantCount?: number;
 }
@@ -168,7 +169,20 @@ export interface ChatMessage {
   employeeRole: string;
   content: string;
   timestamp: string;
+  isPinned?: boolean;
+  isEdited?: boolean;
+  editedAt?: string;
+  isDeleted?: boolean;
   mine?: boolean;
+}
+
+export interface ChannelMember {
+  id: string;
+  channelId: string;
+  employeeId: string;
+  employeeName: string;
+  employeeRole: string;
+  addedAt: string;
 }
 
 export interface ShiftLeaderLogEntry {
