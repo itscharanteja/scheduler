@@ -142,12 +142,23 @@ app/
 
 All API routes follow the pattern `/app/api/{feature}/{action}/route.ts`:
 
-- **Chat** (`/api/chat/*`): Channels, messages, pinning, sending
+- **Chat** (`/api/chat/*`): Channels, messages, pinning, sending, member management
   - GET /api/chat/channels
-  - GET /api/chat/messages, /api/chat/pinned
+  - GET /api/chat/messages?channelId=&limit= — includes is_pinned, is_edited, is_deleted fields
+  - PATCH /api/chat/messages — edit own message (senderId required)
+  - DELETE /api/chat/messages — soft-delete; admins can delete any, users only own
   - POST /api/chat/send
   - PATCH /api/chat/pin
-  - POST /api/chat/channels/create
+  - POST /api/chat/channels/create — accepts createdBy (employee UUID)
+  - PATCH /api/chat/channels/[id] — edit name/description (creator or super_admin only)
+  - DELETE /api/chat/channels/[id] — delete channel (creator or super_admin only)
+  - GET /api/chat/members?channelId= — list channel members
+  - POST /api/chat/members — add member { channelId, employeeId, addedBy }
+  - DELETE /api/chat/members — remove member { channelId, employeeId }
+
+- **Employees** (`/api/employees`):
+  - GET /api/employees — all employees
+  - GET /api/employees?hasAccount=true — only employees linked to a user_profiles row
 
 - **Shift Logs** (`/api/shift-logs/*`): Daily shift leader narrative logs (not the task board)
   - GET /api/shift-logs (with optional limit, date filters)
@@ -210,7 +221,7 @@ export async function getShifts(locationId: string): Promise<Shift[]> {
 - `Employee`, `Shift`, `WeekSchedule`, `Location`
 - `InventoryItem`, `InventoryStatus` (ok|low|critical)
 - `ShiftLog`, `CreateShiftLogPayload`, `ShiftLeaderLogEntry`
-- `ChatChannel`, `ChatMessage`, `SendMessagePayload`
+- `ChatChannel` (includes `createdBy?`), `ChatMessage` (includes `isPinned?`, `isEdited?`, `editedAt?`, `isDeleted?`), `ChannelMember`
 - `WeatherForecast`, `Sale`, `DashboardSummary`
 - `SalesDay`, `DashboardAlert`, `EmployeeActivityItem`
 
@@ -269,6 +280,14 @@ Run in order from `supabase/migrations/`:
 5. `005_sales_alerts_activity.sql` — daily_sales, dashboard_alerts, employee_activity tables + seed
 6. `006_tasks.sql` — shift_logs table (narrative logs) + tasks table (task board) + seed tasks
 7. `007_auth_roles.sql` — user_profiles table + auto-create trigger on auth.users signup
+8. `008_tasks_created_by.sql` — adds created_by to tasks
+9. `009_auto_delete_completed_tasks.sql` — auto-cleanup trigger for completed tasks
+10. `010_authenticated_rls.sql` — RLS for authenticated users
+11. `011_user_profiles_rls.sql` — RLS for user_profiles
+12. `012_social_feed.sql` — social feed tables
+13. `013_user_profiles_email.sql` — email column on user_profiles
+14. `014_chat_features.sql` — adds is_pinned, is_edited, edited_at, is_deleted to chat_messages; creates channel_members table
+15. `015_channel_created_by.sql` — adds created_by to chat_channels for permission enforcement
 
 ### shift_logs vs tasks
 
@@ -336,6 +355,8 @@ Run with: `npm run dev` then `./tests/script.sh` (adjust `BASE_URL`, `LOCATION_I
 - **All Supabase queries go in `lib/supabase.ts`** — never query Supabase directly from a page or API route.
 - **`LOCATION_ID`** is defined in `lib/constants.ts` (`"22222222-2222-4222-8222-222222222222"`) and must be passed to every location-scoped query. Missing it causes silently empty results.
 - **Relational joins**: `chat_messages.sender_id` → `employees.id`. Always join `employees(name, role)` when fetching messages to get sender info.
+- **Ambiguous FK joins**: `channel_members` has two FKs to `employees` (`employee_id` and `added_by`). Always use the explicit hint form: `employees!channel_members_employee_id_fkey(name, role)` — not just `employees(name, role)`.
+- **Weather table**: The Supabase table is `weather_cache`, not `weather_forecasts`. Always use `weather_cache` in queries.
 
 ## Real Data Sources
 
@@ -349,13 +370,33 @@ All data is now backed by real Supabase tables. Use these functions (all in `lib
 | Shift leader logs   | `/api/shift-logs/*` routes                       |
 | Chat channels       | `getChannels(locationId)`                        |
 | Chat messages       | `getMessages(channelId)`                         |
+| Channel members     | `getChannelMembers(channelId)`, `addChannelMember()`, `removeChannelMember()` |
+| Pin message         | `pinMessage(messageId, isPinned)`                |
+| Edit message        | `editMessage(messageId, content)`                |
+| Delete message      | `deleteMessage(messageId)` — soft delete         |
 | Locations           | `getLocations()`                                 |
 | Sales               | `getSales(locationId, limit?)`                   |
 | Alerts              | `getAlerts(locationId)`, `resolveAlert(alertId)` |
 | Activity feed       | `getActivity(locationId, limit?)`                |
 | Employee activity   | `getEmployeeActivity(employeeId, limit?)`        |
+| Weather (cached)    | `getCachedWeather(locationId)`, `upsertWeatherForecast()` — table: `weather_cache` |
 
 There is no longer any permanent mock data — `mockSales`, `mockAlerts`, and `mockEmployeeActivity` have all been replaced with real DB tables and API functions.
+
+## Chat Module — Permission Rules
+
+| Action                        | super_admin | admin (creator) | admin (non-creator) | user_lead / user |
+| ----------------------------- | ----------- | --------------- | ------------------- | ---------------- |
+| Create channel                | ✓           | ✓               | ✓                   | ✗                |
+| Edit channel name/description | ✓           | ✓               | ✗                   | ✗                |
+| Delete channel                | ✓           | ✓               | ✗                   | ✗                |
+| Manage members (add/remove)   | ✓           | ✓               | ✓                   | ✗                |
+| Pin / unpin any message       | ✓           | ✓               | ✓                   | ✗                |
+| Delete any message            | ✓           | ✓               | ✓                   | ✗                |
+| Delete own message            | ✓           | ✓               | ✓                   | ✓                |
+| Edit own message              | ✓           | ✓               | ✓                   | ✓                |
+
+**Important**: The member list in the "Manage Members" dialog only shows employees who have a linked `user_profiles` account (`/api/employees?hasAccount=true`) and excludes the current user.
 
 ## Notes for Future Work
 
@@ -366,6 +407,9 @@ There is no longer any permanent mock data — `mockSales`, `mockAlerts`, and `m
 - ✓ Authentication with role-based access (super_admin, admin, user_lead, user)
 - ✓ Tasks table (task board at /logs) separate from shift_logs (narrative logs)
 - ✓ Real APIs for sales, alerts, and activity — no more mock data
+- ✓ Chat: full message actions (pin, edit, soft-delete), channel CRUD, member management
+- ✓ AI scheduling: fixed role names, employee UUID handling, locationId, Promise.allSettled apply
+- ✓ Schedule: Gantt chart with horizontal time bars, filter by role/employee, AI suggestion panel
 - Future: Wire tasks table to `/logs` page (currently uses getShiftLogs which queries shift_logs, not tasks)
 - Future: Build shift leader logs UI (restricted to user_lead+)
 - Future: Role management UI so admins can assign roles without SQL
