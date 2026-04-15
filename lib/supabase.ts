@@ -995,7 +995,7 @@ export async function getShiftLogs(locationId: string, limit?: number): Promise<
     if (!supabaseClient) return [];
     let query = supabaseClient
       .from("shift_logs")
-      .select("*")
+      .select("*, leader:shift_leader_id(id, name)")
       .eq("location_id", locationId)
       .order("date", { ascending: false });
 
@@ -1005,7 +1005,20 @@ export async function getShiftLogs(locationId: string, limit?: number): Promise<
 
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      locationId: row.location_id,
+      date: row.date,
+      shiftLeaderId: row.shift_leader_id,
+      shiftLeaderName: row.leader?.name ?? null,
+      shiftType: row.shift_type,
+      notes: row.notes ?? "",
+      issuesFlagged: row.issues_flagged ?? false,
+      tasksCompleted: Array.isArray(row.tasks_completed) ? row.tasks_completed : [],
+      tasksPending: Array.isArray(row.tasks_pending) ? row.tasks_pending : [],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at ?? null,
+    }));
   } catch (error) {
     console.error("[supabase:getShiftLogs]", error);
     return [];
@@ -1021,14 +1034,29 @@ export async function createShiftLog(payload: any): Promise<any | null> {
         location_id: payload.locationId,
         date: payload.date,
         shift_leader_id: payload.shiftLeaderId,
+        shift_type: payload.shiftType,
         notes: payload.notes,
-        issues: payload.issues,
-        created_at: new Date().toISOString(),
+        issues_flagged: payload.issuesFlagged ?? false,
+        tasks_completed: payload.tasksCompleted ?? [],
+        tasks_pending: payload.tasksPending ?? [],
       })
-      .select("*")
+      .select("*, leader:shift_leader_id(id, name)")
       .single();
     if (error) throw error;
-    return data;
+    return {
+      id: data.id,
+      locationId: data.location_id,
+      date: data.date,
+      shiftLeaderId: data.shift_leader_id,
+      shiftLeaderName: (data.leader as any)?.name ?? null,
+      shiftType: data.shift_type,
+      notes: data.notes ?? "",
+      issuesFlagged: data.issues_flagged ?? false,
+      tasksCompleted: Array.isArray(data.tasks_completed) ? data.tasks_completed : [],
+      tasksPending: Array.isArray(data.tasks_pending) ? data.tasks_pending : [],
+      createdAt: data.created_at,
+      updatedAt: data.updated_at ?? null,
+    };
   } catch (error) {
     console.error("[supabase:createShiftLog]", error);
     return null;
@@ -1043,8 +1071,9 @@ export async function updateShiftLog(id: string, payload: any): Promise<any | nu
     };
 
     if (payload.notes !== undefined) updatePayload.notes = payload.notes;
-    if (payload.issues !== undefined) updatePayload.issues = payload.issues;
-    if (payload.flagged !== undefined) updatePayload.flagged = payload.flagged;
+    if (payload.issuesFlagged !== undefined) updatePayload.issues_flagged = payload.issuesFlagged;
+    if (payload.tasksCompleted !== undefined) updatePayload.tasks_completed = payload.tasksCompleted;
+    if (payload.tasksPending !== undefined) updatePayload.tasks_pending = payload.tasksPending;
 
     const { data, error } = await client
       .from("shift_logs")
@@ -1085,9 +1114,9 @@ export async function getFlaggedLogs(locationId: string, limit?: number): Promis
     if (!supabaseClient) return [];
     let query = supabaseClient
       .from("shift_logs")
-      .select("*")
+      .select("*, leader:shift_leader_id(id, name)")
       .eq("location_id", locationId)
-      .eq("flagged", true)
+      .eq("issues_flagged", true)
       .order("created_at", { ascending: false });
 
     if (limit) {
@@ -1261,5 +1290,171 @@ export async function getEmployeeActivity(employeeId: string, limit = 6): Promis
   } catch (error) {
     console.error("[supabase:getEmployeeActivity]", error);
     return [];
+  }
+}
+
+// ============================================================
+// Shift Checklists
+// ============================================================
+
+export interface ChecklistTemplate {
+  id: string;
+  locationId: string;
+  shiftType: "morning" | "evening";
+  items: string[];
+  updatedAt: string | null;
+}
+
+export interface ChecklistSubmission {
+  id: string;
+  locationId: string;
+  shiftType: "morning" | "evening";
+  date: string;
+  submittedBy: string | null;
+  checkedItems: boolean[];
+  isComplete: boolean;
+  submittedAt: string;
+}
+
+/** Fetch the template for a shift type. Returns null if none exists yet. */
+export async function getChecklistTemplate(
+  locationId: string,
+  shiftType: "morning" | "evening"
+): Promise<ChecklistTemplate | null> {
+  try {
+    if (!supabaseClient) return null;
+    const { data, error } = await supabaseClient
+      .from("shift_checklist_templates")
+      .select("*")
+      .eq("location_id", locationId)
+      .eq("shift_type", shiftType)
+      .single();
+    if (error) {
+      if (error.code === "PGRST116") return null; // not found
+      throw error;
+    }
+    const row = data as { id: string; location_id: string; shift_type: string; items: unknown; updated_at: string | null };
+    return {
+      id: row.id,
+      locationId: row.location_id,
+      shiftType: row.shift_type as "morning" | "evening",
+      items: Array.isArray(row.items) ? (row.items as string[]) : [],
+      updatedAt: row.updated_at,
+    };
+  } catch (error) {
+    console.error("[supabase:getChecklistTemplate]", error);
+    return null;
+  }
+}
+
+/** Upsert (create or replace) the item list for a shift type template. */
+export async function upsertChecklistTemplate(
+  locationId: string,
+  shiftType: "morning" | "evening",
+  items: string[]
+): Promise<boolean> {
+  try {
+    const client = requireClient();
+    const { error } = await client
+      .from("shift_checklist_templates")
+      .upsert(
+        { location_id: locationId, shift_type: shiftType, items, updated_at: new Date().toISOString() },
+        { onConflict: "location_id,shift_type" }
+      );
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error("[supabase:upsertChecklistTemplate]", error);
+    return false;
+  }
+}
+
+/** Fetch today's (or any date's) submission for a shift type. Returns null if shift not started yet. */
+export async function getChecklistSubmission(
+  locationId: string,
+  shiftType: "morning" | "evening",
+  date: string
+): Promise<ChecklistSubmission | null> {
+  try {
+    if (!supabaseClient) return null;
+    const { data, error } = await supabaseClient
+      .from("shift_checklist_submissions")
+      .select("*")
+      .eq("location_id", locationId)
+      .eq("shift_type", shiftType)
+      .eq("date", date)
+      .single();
+    if (error) {
+      if (error.code === "PGRST116") return null; // not yet created
+      throw error;
+    }
+    const row = data as {
+      id: string; location_id: string; shift_type: string; date: string;
+      submitted_by: string | null; checked_items: unknown; is_complete: boolean; submitted_at: string;
+    };
+    return {
+      id: row.id,
+      locationId: row.location_id,
+      shiftType: row.shift_type as "morning" | "evening",
+      date: row.date,
+      submittedBy: row.submitted_by,
+      checkedItems: Array.isArray(row.checked_items) ? (row.checked_items as boolean[]) : [],
+      isComplete: row.is_complete,
+      submittedAt: row.submitted_at,
+    };
+  } catch (error) {
+    console.error("[supabase:getChecklistSubmission]", error);
+    return null;
+  }
+}
+
+/**
+ * Save progress on a shift checklist. Upserts by (location, shift_type, date).
+ * Called every time a checkbox is toggled or the form is submitted.
+ */
+export async function saveChecklistSubmission(
+  locationId: string,
+  shiftType: "morning" | "evening",
+  date: string,
+  submittedBy: string,
+  checkedItems: boolean[],
+  isComplete: boolean
+): Promise<ChecklistSubmission | null> {
+  try {
+    const client = requireClient();
+    const { data, error } = await client
+      .from("shift_checklist_submissions")
+      .upsert(
+        {
+          location_id: locationId,
+          shift_type: shiftType,
+          date,
+          submitted_by: submittedBy,
+          checked_items: checkedItems,
+          is_complete: isComplete,
+          submitted_at: new Date().toISOString(),
+        },
+        { onConflict: "location_id,shift_type,date" }
+      )
+      .select("*")
+      .single();
+    if (error) throw error;
+    const row = data as {
+      id: string; location_id: string; shift_type: string; date: string;
+      submitted_by: string | null; checked_items: unknown; is_complete: boolean; submitted_at: string;
+    };
+    return {
+      id: row.id,
+      locationId: row.location_id,
+      shiftType: row.shift_type as "morning" | "evening",
+      date: row.date,
+      submittedBy: row.submitted_by,
+      checkedItems: Array.isArray(row.checked_items) ? (row.checked_items as boolean[]) : [],
+      isComplete: row.is_complete,
+      submittedAt: row.submitted_at,
+    };
+  } catch (error) {
+    console.error("[supabase:saveChecklistSubmission]", error);
+    return null;
   }
 }

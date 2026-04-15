@@ -10,6 +10,7 @@ import {
   ChartNoAxesCombined,
   CheckSquare,
   ChevronRight,
+  ClipboardList,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -54,6 +55,7 @@ function getPageMeta(pathname: string, lang: "en" | "sv") {
           reports: ["Rapporter", "Jämför nyckeltal, uppföljning och exportera arbetsdata."],
           settings: ["Inställningar", "Styr arbetsyta, notiser, AI-regler och butiksinställningar."],
           profile: ["Medarbetarprofil", "Snabb sammanfattning av arbetspass, aktivitet och kontaktvägar."],
+          shiftlogs: ["Skiftloggar", "Skiftledare dokumenterar händelser och problem per pass."],
         }
       : {
           dashboard: ["Dashboard", "What matters today across operations, staffing, tasks, and risk."],
@@ -66,6 +68,7 @@ function getPageMeta(pathname: string, lang: "en" | "sv") {
           reports: ["Reports", "Compare key metrics, follow-up outcomes, and export operational data."],
           settings: ["Settings", "Manage workspace defaults, alerts, AI rules, and store setup."],
           profile: ["Team Member", "Quick context on shifts, recent activity, and contact details."],
+          shiftlogs: ["Shift Logs", "Shift leaders document events, tasks, and issues each shift."],
         };
 
   if (pathname.startsWith("/employees/")) {
@@ -73,6 +76,9 @@ function getPageMeta(pathname: string, lang: "en" | "sv") {
   }
   if (pathname.startsWith("/logs")) {
     return { title: copy.tasks[0], subtitle: copy.tasks[1] };
+  }
+  if (pathname.startsWith("/shift-logs")) {
+    return { title: copy.shiftlogs[0], subtitle: copy.shiftlogs[1] };
   }
   if (pathname.startsWith("/chat")) {
     return { title: copy.messages[0], subtitle: copy.messages[1] };
@@ -143,6 +149,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
         [
           { href: "/", label: lang === "sv" ? "Dashboard" : "Dashboard", icon: LayoutDashboard },
           { href: "/logs", label: lang === "sv" ? "Uppgifter" : "Tasks", icon: CheckSquare, badge: openTaskCount },
+          { href: "/shift-logs", label: lang === "sv" ? "Skiftloggar" : "Shift Logs", icon: ClipboardList, roles: ["user_lead", "admin", "super_admin"] },
           { href: "/schedule", label: lang === "sv" ? "Schema" : "Schedule", icon: Calendar },
           { href: "/chat", label: lang === "sv" ? "Meddelanden" : "Messages", icon: MessageSquareMore, badge: unreadChatCount },
           { href: "/feed", label: lang === "sv" ? "Flöde" : "Feed", icon: Newspaper },
