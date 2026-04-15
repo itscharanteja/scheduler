@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
-import { LOCATION_ID } from "@/lib/constants";
+import { useLocation } from "@/context/LocationContext";
 import {
   getEmployees,
   getShiftsByWeek,
@@ -48,6 +48,7 @@ function statusClass(value: number, warningAt: number, dangerAt: number) {
 export default function DashboardPage() {
   const { lang } = useLanguage();
   const { user, hasRole } = useAuth();
+  const { locationId } = useLocation();
   const isBasicUser = !hasRole("user_lead", "admin", "super_admin");
   const [employeesCount, setEmployeesCount] = useState(0);
   const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
@@ -79,12 +80,12 @@ export default function DashboardPage() {
           activityData,
         ] = await Promise.all([
           getEmployees(),
-          getShiftsByWeek(weekStart, LOCATION_ID),
-          getTasks(LOCATION_ID),
-          getChannels(LOCATION_ID),
-          getSales(LOCATION_ID, 1),
-          getAlerts(LOCATION_ID),
-          getActivity(LOCATION_ID, 5),
+          getShiftsByWeek(weekStart, locationId),
+          getTasks(locationId),
+          getChannels(locationId),
+          getSales(locationId, 1),
+          getAlerts(locationId),
+          getActivity(locationId, 5),
         ]);
         if (!active) return;
         setEmployeesCount(employees.length);
@@ -106,7 +107,7 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [weekStart]);
+  }, [weekStart, locationId]);
 
   const todayShifts = useMemo(
     () => weekShifts.filter((shift) => shift.date === todayKey),

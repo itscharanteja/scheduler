@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
-import { LOCATION_ID } from "@/lib/constants";
+import { useLocation } from "@/context/LocationContext";
 import type { ChannelMember, ChatChannel, ChatMessage } from "@/lib/types";
 
 type DraftState = Record<string, string>;
@@ -43,9 +43,11 @@ function fmtTime(iso: string) {
 function CreateChannelDialog({
   onCreated,
   createdBy,
+  locationId,
 }: {
   onCreated: (channel: ChatChannel) => void;
   createdBy?: string | null;
+  locationId: string;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -61,7 +63,7 @@ function CreateChannelDialog({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          locationId: LOCATION_ID,
+          locationId: locationId,
           name: name.trim(),
           description: description.trim() || null,
           isAnnouncement,
@@ -528,6 +530,7 @@ function MessageBubble({
 export default function ChatPage() {
   const { lang } = useLanguage();
   const { user, hasRole } = useAuth();
+  const { locationId } = useLocation();
   const isAdmin = hasRole("admin", "super_admin");
 
   const [channels, setChannels] = useState<ChatChannel[]>([]);
@@ -562,7 +565,7 @@ export default function ChatPage() {
     (async () => {
       try {
         setChannelsLoading(true);
-        const res = await fetch(`/api/chat/channels?locationId=${LOCATION_ID}`);
+        const res = await fetch(`/api/chat/channels?locationId=${locationId}`);
         const data = await res.json();
         if (!active) return;
         const chans = Array.isArray(data.channels) ? data.channels : [];
@@ -726,6 +729,7 @@ export default function ChatPage() {
           {isAdmin && (
             <CreateChannelDialog
               createdBy={user?.employeeId ?? null}
+              locationId={locationId}
               onCreated={(channel) => {
                 setChannels((prev) => [...prev, channel]);
                 setActiveChannelId(channel.id);

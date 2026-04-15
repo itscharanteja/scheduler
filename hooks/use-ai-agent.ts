@@ -3,7 +3,6 @@
 import { format } from "date-fns";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { LOCATION_ID } from "@/lib/constants";
 import { createShift, getEmployees, getShiftsByWeek, isSupabaseConfigured } from "@/lib/supabase";
 import type { Employee, Shift } from "@/lib/types";
 
@@ -31,13 +30,13 @@ function shiftHours(startTime: string, endTime: string): number {
 
 type UseAIAgentOptions = {
   weekStart: Date;
-  locationId?: string;
+  locationId: string;
   autoLoad?: boolean;
 };
 
 export function useAIAgent({
   weekStart,
-  locationId = LOCATION_ID,
+  locationId,
   autoLoad = true,
 }: UseAIAgentOptions) {
   const [prompt, setPrompt] = useState("");

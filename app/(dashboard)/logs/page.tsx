@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
-import { LOCATION_ID } from "@/lib/constants";
+import { useLocation } from "@/context/LocationContext";
 import { getEmployees, getTasks, createTask, updateTask, deleteTask } from "@/lib/supabase";
 import type { Employee } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -251,6 +251,7 @@ function TaskCardList({
 export default function LogsPage() {
   const { lang } = useLanguage();
   const { user, hasRole } = useAuth();
+  const { locationId } = useLocation();
   const canManage = hasRole("admin", "super_admin");
   const showOnlyMyTasks = !hasRole("admin", "super_admin");
 
@@ -276,7 +277,7 @@ export default function LogsPage() {
           showOnlyMyTasks && user?.employeeId
             ? { assigneeId: user.employeeId, createdBy: user.employeeId }
             : undefined;
-        const rows = await getTasks(LOCATION_ID, filter);
+        const rows = await getTasks(locationId, filter);
         if (!active) return;
         setTasks(rows as Task[]);
         setEmployees(emps);
@@ -427,7 +428,7 @@ export default function LogsPage() {
   async function handleCreateTask() {
     if (!title.trim()) return;
     const created = await createTask({
-      locationId: LOCATION_ID,
+      locationId: locationId,
       title: title.trim(),
       note: note.trim(),
       category: "ops",

@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
-import { LOCATION_ID } from "@/lib/constants";
+import { useLocation } from "@/context/LocationContext";
 import {
   getChecklistTemplate,
   upsertChecklistTemplate,
@@ -54,11 +54,13 @@ function ChecklistPanel({
   lang,
   canManage,
   employeeId,
+  locationId,
 }: {
   shiftType: ChecklistShiftType;
   lang: "en" | "sv";
   canManage: boolean;
   employeeId: string | null | undefined;
+  locationId: string;
 }) {
   const [template, setTemplate] = useState<ChecklistTemplate | null>(null);
   const [submission, setSubmission] = useState<ChecklistSubmission | null>(null);
@@ -91,8 +93,8 @@ function ChecklistPanel({
       setLoadingState("loading");
       try {
         const [tmpl, sub] = await Promise.all([
-          getChecklistTemplate(LOCATION_ID, shiftType),
-          getChecklistSubmission(LOCATION_ID, shiftType, today),
+          getChecklistTemplate(locationId, shiftType),
+          getChecklistSubmission(locationId, shiftType, today),
         ]);
         if (!active) return;
         setTemplate(tmpl);
@@ -117,13 +119,13 @@ function ChecklistPanel({
     if (saving) return;
     const cleaned = draftItems.map((i) => i.trim()).filter(Boolean);
     setSaving(true);
-    const ok = await upsertChecklistTemplate(LOCATION_ID, shiftType, cleaned);
+    const ok = await upsertChecklistTemplate(locationId, shiftType, cleaned);
     setSaving(false);
     if (ok) {
       setTemplate((prev) =>
         prev
           ? { ...prev, items: cleaned }
-          : { id: "", locationId: LOCATION_ID, shiftType, items: cleaned, updatedAt: new Date().toISOString() }
+          : { id: "", locationId: locationId, shiftType, items: cleaned, updatedAt: new Date().toISOString() }
       );
       setDraftItems(cleaned);
       setChecked(cleaned.map((_, i) => submission?.checkedItems[i] ?? false));
@@ -142,7 +144,7 @@ function ChecklistPanel({
     const next = checked.map((v, i) => (i === idx ? !v : v));
     setChecked(next);
     const allDone = next.every(Boolean) && next.length > 0;
-    const saved = await saveChecklistSubmission(LOCATION_ID, shiftType, today, employeeId, next, allDone);
+    const saved = await saveChecklistSubmission(locationId, shiftType, today, employeeId, next, allDone);
     if (saved) setSubmission(saved);
   }
 
@@ -152,7 +154,7 @@ function ChecklistPanel({
     const allChecked = items.map(() => true);
     setChecked(allChecked);
     setSubmitting(true);
-    const saved = await saveChecklistSubmission(LOCATION_ID, shiftType, today, employeeId, allChecked, true);
+    const saved = await saveChecklistSubmission(locationId, shiftType, today, employeeId, allChecked, true);
     setSubmitting(false);
     if (saved) {
       setSubmission(saved);
@@ -392,6 +394,7 @@ function ChecklistPanel({
 export default function ShiftLogsPage() {
   const { lang } = useLanguage();
   const { user, hasRole } = useAuth();
+  const { locationId } = useLocation();
   const canManage = hasRole("admin", "super_admin");
 
   const t = lang === "sv"
@@ -417,12 +420,14 @@ export default function ShiftLogsPage() {
             lang={lang}
             canManage={canManage}
             employeeId={user?.employeeId}
+            locationId={locationId}
           />
           <ChecklistPanel
             shiftType="evening"
             lang={lang}
             canManage={canManage}
             employeeId={user?.employeeId}
+            locationId={locationId}
           />
         </div>
       </section>

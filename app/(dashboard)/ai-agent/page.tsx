@@ -8,6 +8,7 @@ import { Bot, CheckCircle2, Loader2, Sparkles, TriangleAlert, XCircle } from "lu
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
+import { useLocation } from "@/context/LocationContext";
 import { useAIAgent } from "@/hooks/use-ai-agent";
 
 type ResultShift = NonNullable<ReturnType<typeof useAIAgent>["result"]>["shifts"][number];
@@ -24,6 +25,7 @@ function parseWeekParam(weekParam: string | null): Date {
 
 function DashboardAiAgentContent() {
   const { lang } = useLanguage();
+  const { locationId } = useLocation();
   const searchParams = useSearchParams();
   const weekStart = useMemo(
     () => parseWeekParam(searchParams.get("week")),
@@ -78,7 +80,7 @@ function DashboardAiAgentContent() {
     generate,
     applyGenerated,
     isSupabaseConfigured,
-  } = useAIAgent({ weekStart });
+  } = useAIAgent({ weekStart, locationId });
 
   async function handleApply() {
     const weekParam = await applyGenerated();

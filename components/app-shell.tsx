@@ -6,9 +6,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bot,
+  Building2,
   Calendar,
   ChartNoAxesCombined,
   CheckSquare,
+  ChevronDown,
   ChevronRight,
   ClipboardList,
   LayoutDashboard,
@@ -26,7 +28,7 @@ import {
 import { toast } from "sonner";
 import { LanguageProvider, useLanguage } from "@/context/LanguageContext";
 import { useAuth, type UserRole } from "@/context/AuthContext";
-import { LOCATION_ID } from "@/lib/constants";
+import { LocationProvider, useLocation } from "@/context/LocationContext";
 import { getEmployees, getTasks, getChannels } from "@/lib/supabase";
 import type { Employee } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -108,10 +110,13 @@ function getPageMeta(pathname: string, lang: "en" | "sv") {
 function ShellLayout({ children }: { children: React.ReactNode }) {
   const { lang, setLang } = useLanguage();
   const { user, hasRole, signOut } = useAuth();
+  const { locationId, locations, setLocationId } = useLocation();
+  const isSuperAdmin = hasRole("super_admin");
   const pathname = usePathname();
   const currentMeta = useMemo(() => getPageMeta(pathname, lang), [lang, pathname]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [branchOpen, setBranchOpen] = useState(false);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -129,8 +134,8 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
           : undefined;
         const [emps, taskData, channels] = await Promise.all([
           getEmployees(),
-          getTasks(LOCATION_ID, taskFilter),
-          getChannels(LOCATION_ID),
+          getTasks(locationId, taskFilter),
+          getChannels(locationId),
         ]);
         setEmployees(emps);
         setLogs(taskData);
@@ -141,7 +146,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
         console.error("[app-shell] Failed to load shell data:", error);
       }
     })();
-  }, [user?.employeeId]); // re-run once user/employeeId is known
+  }, [user?.employeeId, locationId]); // re-run when user or active branch changes
 
   const navItems = useMemo<NavItem[]>(
     () =>
@@ -222,6 +227,41 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
                 : "Fast workspace for staffing, tasks, messages, and AI decisions."}
             </p>
           </div>
+
+          {isSuperAdmin && locations.length > 0 && (
+            <div className="px-3 mt-2 relative">
+              <button
+                type="button"
+                onClick={() => setBranchOpen((v) => !v)}
+                className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <span className="flex-1 truncate">
+                  {locations.find((l) => l.id === locationId)?.name ?? "Select branch"}
+                </span>
+                <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${branchOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {branchOpen && (
+                <div className="absolute left-3 right-3 top-[calc(100%+4px)] z-50 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                  {locations.map((loc) => (
+                    <button
+                      key={loc.id}
+                      type="button"
+                      onClick={() => { setLocationId(loc.id); setBranchOpen(false); }}
+                      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs transition-colors hover:bg-slate-50 ${loc.id === locationId ? "font-semibold text-slate-900 bg-slate-50" : "text-slate-600"}`}
+                    >
+                      <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      <span className="truncate">{loc.name}</span>
+                      {loc.id === locationId && (
+                        <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="app-sidebar-section flex-1 overflow-auto">
             <div className="app-sidebar-label">{lang === "sv" ? "Arbetsyta" : "Workspace"}</div>
@@ -417,10 +457,19 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function LocationAwareShell({ children }: { children: React.ReactNode }) {
+  const { hasRole } = useAuth();
+  return (
+    <LocationProvider isSuperAdmin={hasRole("super_admin")}>
+      <ShellLayout>{children}</ShellLayout>
+    </LocationProvider>
+  );
+}
+
 export function LanguageAppShell({ children }: { children: React.ReactNode }) {
   return (
     <LanguageProvider>
-      <ShellLayout>{children}</ShellLayout>
+      <LocationAwareShell>{children}</LocationAwareShell>
     </LanguageProvider>
   );
 }

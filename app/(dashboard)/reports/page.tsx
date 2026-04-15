@@ -5,7 +5,7 @@ import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { GlassSkeleton } from "@/components/ui/glass-skeleton";
-import { LOCATION_ID } from "@/lib/constants";
+import { useLocation } from "@/context/LocationContext";
 import { getSales, getShiftLogs, getShiftsByWeek } from "@/lib/supabase";
 import { startOfWeek } from "date-fns";
 import type { SalesDay, Shift } from "@/lib/types";
@@ -25,6 +25,7 @@ function currency(value: number) {
 }
 
 export default function ReportsPage() {
+  const { locationId } = useLocation();
   const [range, setRange] = useState("week");
   const [sales, setSales] = useState<SalesDay[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -39,9 +40,9 @@ export default function ReportsPage() {
         setLoading(true);
         const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
         const [salesData, logsData, scheduleData] = await Promise.all([
-          getSales(LOCATION_ID, 7),
-          getShiftLogs(LOCATION_ID, 100),
-          getShiftsByWeek(weekStart, LOCATION_ID),
+          getSales(locationId, 7),
+          getShiftLogs(locationId, 100),
+          getShiftsByWeek(weekStart, locationId),
         ]);
         if (!active) return;
         setSales([...salesData].reverse());
@@ -54,7 +55,7 @@ export default function ReportsPage() {
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [locationId]);
 
   const report = useMemo(() => {
     const totalHours = shifts.reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0);

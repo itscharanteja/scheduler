@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
-import { LOCATION_ID } from "@/lib/constants";
+import { useLocation } from "@/context/LocationContext";
 import {
   createShift,
   deleteShift,
@@ -526,6 +526,7 @@ function ShiftPopover({
 function SchedulePageContent() {
   const { lang } = useLanguage();
   const { hasRole } = useAuth();
+  const { locationId } = useLocation();
   const canEdit = hasRole("admin", "super_admin");
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -577,8 +578,8 @@ function SchedulePageContent() {
       try {
         const [emps, schedule, weatherRes] = await Promise.all([
           getEmployees(),
-          getShiftsByWeek(weekStart, LOCATION_ID),
-          fetch(`/api/weather?locationId=${LOCATION_ID}`).then((r) => r.json()).catch(() => ({ forecasts: [] })),
+          getShiftsByWeek(weekStart, locationId),
+          fetch(`/api/weather?locationId=${locationId}`).then((r) => r.json()).catch(() => ({ forecasts: [] })),
         ]);
         if (!active) return;
         setEmployees(emps);
@@ -631,7 +632,7 @@ function SchedulePageContent() {
 
   async function handleCreate(form: ShiftForm) {
     const emp = employees.find((e) => e.id === form.employeeId);
-    const created = await createShift({ employeeId: form.employeeId, date: form.date, startTime: form.startTime, endTime: form.endTime, role: form.role, locationId: emp?.locationId ?? LOCATION_ID, status: "draft" });
+    const created = await createShift({ employeeId: form.employeeId, date: form.date, startTime: form.startTime, endTime: form.endTime, role: form.role, locationId: emp?.locationId ?? locationId, status: "draft" });
     setShifts((prev) => [...prev, created]);
     toast.success("Shift added");
   }
