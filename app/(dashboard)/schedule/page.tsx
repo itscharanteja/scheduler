@@ -577,7 +577,7 @@ function SchedulePageContent() {
       setLoading(true);
       try {
         const [emps, schedule, weatherRes] = await Promise.all([
-          getEmployees(),
+          getEmployees(locationId),
           getShiftsByWeek(weekStart, locationId),
           fetch(`/api/weather?locationId=${locationId}`).then((r) => r.json()).catch(() => ({ forecasts: [] })),
         ]);

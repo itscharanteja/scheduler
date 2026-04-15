@@ -260,6 +260,7 @@ function ManageMembersDialog({
   channel: ChatChannel;
   currentUserEmployeeId: string | null;
 }) {
+  const { locationId } = useLocation();
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<ChannelMember[]>([]);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
@@ -271,7 +272,7 @@ function ManageMembersDialog({
     try {
       const [membersRes, empRes] = await Promise.all([
         fetch(`/api/chat/members?channelId=${channel.id}`),
-        fetch(`/api/employees?hasAccount=true`),
+        fetch(`/api/employees?hasAccount=true&locationId=${locationId}`),
       ]);
       const membersData = await membersRes.json();
       const empData = await empRes.json();

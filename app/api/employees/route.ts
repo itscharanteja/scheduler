@@ -10,6 +10,7 @@ import { supabaseClient } from "@/lib/supabase";
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const hasAccount = request.nextUrl.searchParams.get("hasAccount") === "true";
+    const locationId = request.nextUrl.searchParams.get("locationId") ?? undefined;
 
     if (hasAccount && supabaseClient) {
       // Fetch employee_ids that have a user_profiles row
@@ -24,12 +25,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         (profiles as { employee_id: string }[]).map((p) => p.employee_id)
       );
 
-      const all = await getEmployees();
+      const all = await getEmployees(locationId);
       const employees = all.filter((e) => accountEmployeeIds.has(e.id));
       return NextResponse.json({ employees });
     }
 
-    const employees = await getEmployees();
+    const employees = await getEmployees(locationId);
     return NextResponse.json({ employees });
   } catch (error) {
     console.error("[api/employees]", error);

@@ -60,7 +60,7 @@ export function useAIAgent({
     setError(null);
     try {
       const [employeeRows, schedule] = await Promise.all([
-        getEmployees(),
+        getEmployees(locationId),
         getShiftsByWeek(weekStart, locationId),
       ]);
       setEmployees(employeeRows);

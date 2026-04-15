@@ -272,7 +272,7 @@ export default function LogsPage() {
     (async () => {
       try {
         setLoading(true);
-        const emps = await getEmployees();
+        const emps = await getEmployees(locationId);
         const filter =
           showOnlyMyTasks && user?.employeeId
             ? { assigneeId: user.employeeId, createdBy: user.employeeId }

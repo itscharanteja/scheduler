@@ -227,16 +227,15 @@ function requireClient(): SupabaseClient {
 
 // Public API
 
-export async function getEmployees(): Promise<Employee[]> {
+export async function getEmployees(locationId?: string): Promise<Employee[]> {
   try {
     if (!supabaseClient) {
-      return getRuntimeStore().employees.slice().sort((a, b) => a.name.localeCompare(b.name));
+      const all = getRuntimeStore().employees.slice().sort((a, b) => a.name.localeCompare(b.name));
+      return locationId ? all.filter((e) => e.locationId === locationId) : all;
     }
-    const { data, error } = await supabaseClient
-      .from("employees")
-      .select("*")
-      .order("name", { ascending: true });
-
+    let query = supabaseClient.from("employees").select("*").order("name", { ascending: true });
+    if (locationId) query = query.eq("location_id", locationId);
+    const { data, error } = await query;
     if (error) throw error;
     return (data as DbEmployeeRow[]).map(mapEmployee);
   } catch (error) {

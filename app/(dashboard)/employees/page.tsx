@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/context/LanguageContext";
+import { useLocation } from "@/context/LocationContext";
 import {
   createEmployee,
   getEmployees,
@@ -40,6 +41,7 @@ function roleClass(role: string) {
 
 export default function EmployeesDashboardPage() {
   const { lang } = useLanguage();
+  const { locationId } = useLocation();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
@@ -57,9 +59,9 @@ export default function EmployeesDashboardPage() {
         setLoading(true);
         const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
         const [emps, locs, schedule] = await Promise.all([
-          getEmployees(),
+          getEmployees(locationId),
           getLocations(),
-          getShiftsByWeek(weekStart),
+          getShiftsByWeek(weekStart, locationId),
         ]);
         if (!active) return;
         setEmployees(emps);
@@ -75,7 +77,7 @@ export default function EmployeesDashboardPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [locationId]);
 
   const text =
     lang === "sv"
@@ -114,7 +116,7 @@ export default function EmployeesDashboardPage() {
     let mounted = true;
     (async () => {
       try {
-        const rows = await getEmployees();
+        const rows = await getEmployees(locationId);
         if (mounted) {
           setEmployees(rows);
         }
@@ -127,7 +129,7 @@ export default function EmployeesDashboardPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [locationId]);
 
   const today = new Date().toISOString().split("T")[0];
   const onShiftIds = new Set(weekShifts.filter((shift) => shift.date === today).map((shift) => shift.employeeId));

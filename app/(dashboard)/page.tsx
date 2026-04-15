@@ -79,7 +79,7 @@ export default function DashboardPage() {
           alertData,
           activityData,
         ] = await Promise.all([
-          getEmployees(),
+          getEmployees(locationId),
           getShiftsByWeek(weekStart, locationId),
           getTasks(locationId),
           getChannels(locationId),

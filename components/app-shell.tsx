@@ -133,7 +133,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
           ? { assigneeId: user.employeeId, createdBy: user.employeeId }
           : undefined;
         const [emps, taskData, channels] = await Promise.all([
-          getEmployees(),
+          getEmployees(locationId),
           getTasks(locationId, taskFilter),
           getChannels(locationId),
         ]);

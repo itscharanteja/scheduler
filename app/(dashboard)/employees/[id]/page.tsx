@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useLocation } from "@/context/LocationContext";
 import { getEmployees, getLocations, getShiftsByWeek, getEmployeeActivity, updateEmployee } from "@/lib/supabase";
 import type { Employee, EmployeeActivityItem, Location, Shift } from "@/lib/types";
 
@@ -30,6 +31,7 @@ function suggestedRole(empRole: string): string {
 export default function EmployeeProfilePage() {
   const { lang } = useLanguage();
   const { hasRole } = useAuth();
+  const { locationId } = useLocation();
   const params = useParams<{ id: string }>();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -55,9 +57,9 @@ export default function EmployeeProfilePage() {
       try {
         const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
         const [rows, locs, schedule, activityData] = await Promise.all([
-          getEmployees(),
+          getEmployees(locationId),
           getLocations(),
-          getShiftsByWeek(weekStart),
+          getShiftsByWeek(weekStart, locationId),
           getEmployeeActivity(params.id, 6),
         ]);
         if (!active) return;
