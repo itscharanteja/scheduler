@@ -1,6 +1,7 @@
 import { addDays, format, startOfWeek } from "date-fns";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { LOCATION_ID } from "@/lib/constants";
+import { getCallerSession, unauthorized } from "@/lib/api-auth";
 import { getShiftsByWeek, isSupabaseConfigured } from "@/lib/supabase";
 import { getRuntimeStore } from "@/lib/server/runtime-store";
 import type { AppNotification, NotificationKind } from "@/lib/types";
@@ -68,6 +69,8 @@ function mergeNotifications(base: AppNotification[], manual: AppNotification[]):
 }
 
 export async function GET(req: Request) {
+  const caller = await getCallerSession(req as NextRequest);
+  if (!caller) return unauthorized();
   const url = new URL(req.url);
   const limit = Number(url.searchParams.get("limit") ?? 12);
 

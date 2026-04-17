@@ -1,13 +1,19 @@
 /*
-  GET    /api/chat/members?channelId=xxx
-  POST   /api/chat/members  { channelId, employeeId, addedBy }
-  DELETE /api/chat/members  { channelId, employeeId }
+  GET    /api/chat/members?channelId=xxx       — list members (any authenticated user)
+  POST   /api/chat/members  { channelId, employeeId }   — add member (admin+)
+  DELETE /api/chat/members  { channelId, employeeId }   — remove member (admin+)
+
+  addedBy is derived from the session — not trusted from the body.
 */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getChannelMembers, addChannelMember, removeChannelMember } from "@/lib/supabase";
+import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+
   try {
     const channelId = request.nextUrl.searchParams.get("channelId");
     if (!channelId) {
@@ -22,19 +28,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "admin", "super_admin")) return forbidden();
+
   try {
     const body = await request.json();
-    const { channelId, employeeId, addedBy } = body as {
-      channelId: string;
-      employeeId: string;
-      addedBy?: string;
-    };
+    const { channelId, employeeId } = body as { channelId: string; employeeId: string };
 
     if (!channelId || !employeeId) {
-      return NextResponse.json({ error: "channelId and employeeId are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "channelId and employeeId are required" },
+        { status: 400 },
+      );
     }
 
-    await addChannelMember(channelId, employeeId, addedBy);
+    await addChannelMember(channelId, employeeId, caller.employeeId ?? undefined);
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {
     console.error("[chat/members POST]", error);
@@ -43,15 +52,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 }
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "admin", "super_admin")) return forbidden();
+
   try {
     const body = await request.json();
-    const { channelId, employeeId } = body as {
-      channelId: string;
-      employeeId: string;
-    };
+    const { channelId, employeeId } = body as { channelId: string; employeeId: string };
 
     if (!channelId || !employeeId) {
-      return NextResponse.json({ error: "channelId and employeeId are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "channelId and employeeId are required" },
+        { status: 400 },
+      );
     }
 
     await removeChannelMember(channelId, employeeId);

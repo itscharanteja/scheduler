@@ -7,8 +7,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getInventory } from "@/lib/supabase";
+import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "user_lead", "admin", "super_admin")) return forbidden();
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const locationId = searchParams.get("locationId");

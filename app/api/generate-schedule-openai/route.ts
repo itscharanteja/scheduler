@@ -1,5 +1,6 @@
 import { addDays, format } from "date-fns";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
 import openai, { MODEL } from "@/lib/openai";
 import type { Employee, Shift } from "@/lib/types";
 import { getCachedWeather } from "@/lib/supabase";
@@ -292,6 +293,10 @@ function validateGeneratedResponse(
 }
 
 export async function POST(req: Request) {
+  const caller = await getCallerSession(req as NextRequest);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "admin", "super_admin")) return forbidden();
+
   if (!process.env.OPENAI_API_KEY?.trim()) {
     return NextResponse.json(
       {

@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import type { WeatherForecast, WeatherSuggestion } from "@/lib/types";
+import { getCallerSession, unauthorized } from "@/lib/api-auth";
 import {
   getCachedWeather,
   upsertWeatherForecast,
@@ -61,6 +62,9 @@ function mapToWeatherSuggestion(
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+
   try {
     const locationId = request.nextUrl.searchParams.get("locationId");
 

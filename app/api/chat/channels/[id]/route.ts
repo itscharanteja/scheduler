@@ -1,8 +1,8 @@
 /*
-  PATCH  /api/chat/channels/[id]  — edit name/description  { name, description, requesterId, isSuperAdmin }
-  DELETE /api/chat/channels/[id]  — delete channel          { requesterId, isSuperAdmin }
+  PATCH  /api/chat/channels/[id]  — edit name/description  { name, description }
+  DELETE /api/chat/channels/[id]  — delete channel
 
-  Permission rules:
+  Permission rules (enforced server-side via session, not client-supplied flags):
   - Creator can always edit/delete their own channel
   - super_admin can edit/delete any channel
   - admin can only edit/delete channels they created
@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseClient } from "@/lib/supabase";
+import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
 
 function generateSlug(name: string): string {
   return name
@@ -21,10 +22,11 @@ function generateSlug(name: string): string {
 
 async function resolvePermission(
   channelId: string,
-  requesterId: string,
+  callerId: string,
   isSuperAdmin: boolean
-): Promise<{ allowed: boolean; error?: string }> {
-  if (!supabaseClient) return { allowed: false, error: "Supabase not configured" };
+): Promise<boolean> {
+  if (!supabaseClient) return false;
+  if (isSuperAdmin) return true;
 
   const { data, error } = await supabaseClient
     .from("chat_channels")
@@ -32,41 +34,34 @@ async function resolvePermission(
     .eq("id", channelId)
     .single();
 
-  if (error || !data) return { allowed: false, error: "Channel not found" };
-
+  if (error || !data) return false;
   const createdBy = (data as { created_by: string | null }).created_by;
-
-  // super_admin can do anything
-  if (isSuperAdmin) return { allowed: true };
-
-  // creator can manage their own channel
-  if (createdBy && createdBy === requesterId) return { allowed: true };
-
-  return { allowed: false, error: "Not authorised" };
+  return !!createdBy && createdBy === callerId;
 }
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "admin", "super_admin")) return forbidden();
+
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, description, requesterId, isSuperAdmin } = body as {
-      name?: string;
-      description?: string;
-      requesterId: string;
-      isSuperAdmin?: boolean;
-    };
+    const { name, description } = body as { name?: string; description?: string };
 
-    if (!id || !requesterId) {
-      return NextResponse.json({ error: "id and requesterId are required" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "Channel id is required" }, { status: 400 });
     }
 
-    const { allowed, error: permError } = await resolvePermission(id, requesterId, !!isSuperAdmin);
-    if (!allowed) return NextResponse.json({ error: permError ?? "Not authorised" }, { status: 403 });
+    const allowed = await resolvePermission(id, caller.userId, caller.role === "super_admin");
+    if (!allowed) return forbidden();
 
-    if (!supabaseClient) return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
+    if (!supabaseClient) {
+      return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
+    }
 
     const updates: Record<string, unknown> = {};
     if (name?.trim()) {
@@ -90,7 +85,10 @@ export async function PATCH(
 
     if (error) {
       if (error.code === "23505") {
-        return NextResponse.json({ error: "A channel with that name already exists" }, { status: 409 });
+        return NextResponse.json(
+          { error: "A channel with that name already exists" },
+          { status: 409 },
+        );
       }
       throw error;
     }
@@ -106,22 +104,22 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "admin", "super_admin")) return forbidden();
+
   try {
     const { id } = await params;
-    const body = await request.json();
-    const { requesterId, isSuperAdmin } = body as {
-      requesterId: string;
-      isSuperAdmin?: boolean;
-    };
-
-    if (!id || !requesterId) {
-      return NextResponse.json({ error: "id and requesterId are required" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "Channel id is required" }, { status: 400 });
     }
 
-    const { allowed, error: permError } = await resolvePermission(id, requesterId, !!isSuperAdmin);
-    if (!allowed) return NextResponse.json({ error: permError ?? "Not authorised" }, { status: 403 });
+    const allowed = await resolvePermission(id, caller.userId, caller.role === "super_admin");
+    if (!allowed) return forbidden();
 
-    if (!supabaseClient) return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
+    if (!supabaseClient) {
+      return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
+    }
 
     const { error } = await supabaseClient
       .from("chat_channels")

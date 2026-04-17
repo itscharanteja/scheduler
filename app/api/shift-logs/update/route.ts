@@ -1,65 +1,41 @@
 /*
   PATCH /api/shift-logs/update
-  Updates notes, tasks, or flag status
-  on an existing log entry
-  Body: { id, notes?, tasksCompleted?,
-          tasksPending?, issuesFlagged? }
+  Updates notes, tasks, or flag status on an existing log entry.
+  Requires user_lead or above.
+  Body: { id, notes?, tasksCompleted?, tasksPending?, issuesFlagged? }
 */
 
 import { NextRequest, NextResponse } from "next/server";
 import type { ShiftLog } from "@/lib/types";
 import { supabaseClient } from "@/lib/supabase";
+import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
 
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "user_lead", "admin", "super_admin")) return forbidden();
+
   try {
     const body = await request.json();
-    const {
-      id,
-      notes,
-      tasksCompleted,
-      tasksPending,
-      issuesFlagged,
-    } = body;
+    const { id, notes, tasksCompleted, tasksPending, issuesFlagged } = body;
 
     if (!id) {
-      return NextResponse.json(
-        { error: "id is required", success: false },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "id is required", success: false }, { status: 400 });
     }
 
     if (!supabaseClient) {
-      return NextResponse.json(
-        { error: "Supabase client is not configured", success: false },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "Supabase client is not configured", success: false }, { status: 500 });
     }
 
-    // Build update object with only provided fields
     const updateData: Record<string, unknown> = {};
-
-    if (notes !== undefined) {
-      updateData.notes = notes;
-    }
-
-    if (tasksCompleted !== undefined) {
-      updateData.tasks_completed = JSON.stringify(tasksCompleted);
-    }
-
-    if (tasksPending !== undefined) {
-      updateData.tasks_pending = JSON.stringify(tasksPending);
-    }
-
-    if (issuesFlagged !== undefined) {
-      updateData.issues_flagged = issuesFlagged;
-    }
+    if (notes !== undefined) updateData.notes = notes;
+    if (tasksCompleted !== undefined) updateData.tasks_completed = JSON.stringify(tasksCompleted);
+    if (tasksPending !== undefined) updateData.tasks_pending = JSON.stringify(tasksPending);
+    if (issuesFlagged !== undefined) updateData.issues_flagged = issuesFlagged;
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
-        {
-          error: "At least one field must be provided for update",
-          success: false,
-        },
+        { error: "At least one field must be provided for update", success: false },
         { status: 400 },
       );
     }
@@ -74,19 +50,11 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     if (error) throw error;
 
     const row = data as {
-      id: string;
-      location_id: string;
-      shift_leader_id: string;
-      date: string;
-      shift_type: string;
-      notes: string;
-      issues_flagged: boolean;
-      tasks_completed: string;
-      tasks_pending: string;
-      created_at: string;
+      id: string; location_id: string; shift_leader_id: string; date: string;
+      shift_type: string; notes: string; issues_flagged: boolean;
+      tasks_completed: string; tasks_pending: string; created_at: string;
     };
 
-    // Fetch shift leader name
     const { data: employee } = await supabaseClient
       .from("employees")
       .select("name")
@@ -107,15 +75,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       createdAt: row.created_at,
     };
 
-    return NextResponse.json({
-      log,
-      success: true,
-    });
+    return NextResponse.json({ log, success: true });
   } catch (error) {
     console.error("[shift-logs/update]", error);
-    return NextResponse.json(
-      { error: "Failed to update shift log", success: false },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to update shift log", success: false }, { status: 500 });
   }
 }

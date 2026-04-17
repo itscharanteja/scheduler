@@ -7,8 +7,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getFlaggedLogs } from "@/lib/supabase";
+import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "user_lead", "admin", "super_admin")) return forbidden();
+
   try {
     const locationId = request.nextUrl.searchParams.get("locationId");
     const limitStr = request.nextUrl.searchParams.get("limit");

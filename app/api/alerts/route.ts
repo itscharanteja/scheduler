@@ -1,9 +1,19 @@
+/*
+  GET   /api/alerts?locationId=xxx   — fetch alerts (user_lead+)
+  PATCH /api/alerts                  — resolve an alert (admin+)
+  Body: { alertId }
+*/
+
 import { NextRequest, NextResponse } from "next/server";
 import { getAlerts, resolveAlert } from "@/lib/supabase";
+import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const locationId = req.nextUrl.searchParams.get("locationId");
+  const caller = await getCallerSession(req);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "user_lead", "admin", "super_admin")) return forbidden();
 
+  const locationId = req.nextUrl.searchParams.get("locationId");
   if (!locationId) {
     return NextResponse.json({ error: "locationId is required" }, { status: 400 });
   }
@@ -18,6 +28,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const caller = await getCallerSession(req);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "admin", "super_admin")) return forbidden();
+
   try {
     const { alertId } = await req.json() as { alertId: string };
     if (!alertId) {

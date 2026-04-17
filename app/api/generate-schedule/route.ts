@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCachedWeather } from "@/lib/supabase";
+import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
 import {
   anonymiseEmployees,
   anonymiseShifts,
@@ -123,6 +124,10 @@ function extractJsonObject(raw: string): string {
 }
 
 export async function POST(req: Request) {
+  const caller = await getCallerSession(req as NextRequest);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "admin", "super_admin")) return forbidden();
+
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
     if (!apiKey) {

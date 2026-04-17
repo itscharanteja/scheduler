@@ -1,12 +1,14 @@
 /*
   POST /api/chat/channels/create
-  Creates a new chat channel
-  Body: { locationId, name, description, isAnnouncement }
+  Creates a new chat channel. Requires admin or super_admin.
+  Body: { locationId, name, description?, isAnnouncement? }
+  Channel creator is derived from the session — not trusted from the body.
 */
 
 import { NextRequest, NextResponse } from "next/server";
 import type { ChatChannel } from "@/lib/types";
 import { supabaseClient } from "@/lib/supabase";
+import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
 
 function generateSlug(name: string): string {
   return name
@@ -17,9 +19,13 @@ function generateSlug(name: string): string {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "admin", "super_admin")) return forbidden();
+
   try {
     const body = await request.json();
-    const { locationId, name, description, isAnnouncement, createdBy } = body;
+    const { locationId, name, description, isAnnouncement } = body;
 
     if (!locationId || !name) {
       return NextResponse.json(
@@ -35,17 +41,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const slug = generateSlug(name);
-
     const { data, error } = await supabaseClient
       .from("chat_channels")
       .insert({
         location_id: locationId,
         name,
-        slug,
+        slug: generateSlug(name),
         description: description || null,
         is_announcement: isAnnouncement || false,
-        created_by: createdBy || null,
+        created_by: caller.employeeId ?? null,
       })
       .select("*")
       .single();
@@ -53,10 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (error) {
       if (error.code === "23505") {
         return NextResponse.json(
-          {
-            error: "A channel with that name already exists",
-            success: false,
-          },
+          { error: "A channel with that name already exists", success: false },
           { status: 409 },
         );
       }
@@ -64,14 +65,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const row = data as {
-      id: string;
-      location_id: string;
-      name: string;
-      slug: string;
-      description: string | null;
-      is_announcement: boolean;
-      created_at: string;
-      created_by: string | null;
+      id: string; location_id: string; name: string; slug: string;
+      description: string | null; is_announcement: boolean;
+      created_at: string; created_by: string | null;
     };
 
     const channel: ChatChannel = {
@@ -85,13 +81,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       createdBy: row.created_by ?? undefined,
     };
 
-    return NextResponse.json(
-      {
-        channel,
-        success: true,
-      },
-      { status: 201 },
-    );
+    return NextResponse.json({ channel, success: true }, { status: 201 });
   } catch (error) {
     console.error("[chat/channels/create]", error);
     return NextResponse.json(

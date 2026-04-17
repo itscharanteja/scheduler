@@ -12,8 +12,12 @@ import { NextRequest, NextResponse } from "next/server";
 import type { ShiftLog } from "@/lib/types";
 import { supabaseClient } from "@/lib/supabase";
 import { subDays } from "date-fns";
+import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "user_lead", "admin", "super_admin")) return forbidden();
   try {
     const locationId = request.nextUrl.searchParams.get("locationId");
 

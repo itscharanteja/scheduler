@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSales } from "@/lib/supabase";
+import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const caller = await getCallerSession(req);
+  if (!caller) return unauthorized();
+  if (!hasRole(caller, "user_lead", "admin", "super_admin")) return forbidden();
   const locationId = req.nextUrl.searchParams.get("locationId");
   const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "7", 10);
 

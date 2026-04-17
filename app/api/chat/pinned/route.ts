@@ -6,8 +6,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { ChatMessage } from "@/lib/types";
 import { supabaseClient } from "@/lib/supabase";
+import { getCallerSession, unauthorized } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const caller = await getCallerSession(request);
+  if (!caller) return unauthorized();
+
   try {
     const channelId = request.nextUrl.searchParams.get("channelId");
 
