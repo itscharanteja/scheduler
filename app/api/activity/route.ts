@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getActivity } from "@/lib/supabase";
-import { getCallerSession, unauthorized } from "@/lib/api-auth";
+import { getCallerSession, unauthorized, resolveLocationId } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
   const caller = await getCallerSession(req);
   if (!caller) return unauthorized();
-  const locationId = req.nextUrl.searchParams.get("locationId");
+  const locationId = resolveLocationId(caller, req.nextUrl.searchParams.get("locationId"));
   const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "20", 10);
 
   if (!locationId) {
-    return NextResponse.json({ error: "locationId is required" }, { status: 400 });
+    return NextResponse.json({ error: "No location associated with your account." }, { status: 403 });
   }
 
   try {

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getEmployees } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabase";
-import { getCallerSession, unauthorized } from "@/lib/api-auth";
+import { getCallerSession, unauthorized, resolveLocationId } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const caller = await getCallerSession(request);
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const hasAccount = request.nextUrl.searchParams.get("hasAccount") === "true";
-    const locationId = request.nextUrl.searchParams.get("locationId") ?? undefined;
+    const locationId = resolveLocationId(caller, request.nextUrl.searchParams.get("locationId")) ?? undefined;
 
     if (hasAccount && supabaseClient) {
       // Fetch employee_ids that have a user_profiles row

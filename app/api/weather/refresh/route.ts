@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { upsertWeatherForecast } from "@/lib/supabase";
-import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
+import { getCallerSession, hasRole, unauthorized, forbidden, resolveLocationId } from "@/lib/api-auth";
 import {
   fetchWeatherFromAPI,
   getMockWeather,
@@ -25,12 +25,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!hasRole(caller, "admin", "super_admin")) return forbidden();
 
   try {
-    const locationId = request.nextUrl.searchParams.get("locationId");
+    const locationId = resolveLocationId(caller, request.nextUrl.searchParams.get("locationId"));
 
     if (!locationId) {
       return NextResponse.json(
-        { error: "locationId parameter is required" },
-        { status: 400 },
+        { error: "No location associated with your account." },
+        { status: 403 },
       );
     }
 

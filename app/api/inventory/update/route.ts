@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateInventoryItem, getInventory, getChannels, sendMessage } from "@/lib/supabase";
 import type { InventoryItem } from "@/lib/types";
-import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
+import { getCallerSession, hasRole, unauthorized, forbidden, resolveLocationId } from "@/lib/api-auth";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const caller = await getCallerSession(request);
@@ -18,12 +18,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const body = await request.json();
-    const { id, newStock, locationId } = body;
+    const { id, newStock } = body;
+    const locationId = resolveLocationId(caller, body.locationId);
 
-    if (!id || !locationId || newStock === undefined) {
+    if (!id || newStock === undefined) {
       return NextResponse.json(
-        { error: "id, newStock and locationId are required" },
+        { error: "id and newStock are required" },
         { status: 400 },
+      );
+    }
+    if (!locationId) {
+      return NextResponse.json(
+        { error: "No location associated with your account." },
+        { status: 403 },
       );
     }
 

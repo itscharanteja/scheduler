@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCachedWeather } from "@/lib/supabase";
-import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
+import { getCallerSession, hasRole, unauthorized, forbidden, resolveLocationId } from "@/lib/api-auth";
 import {
   anonymiseEmployees,
   anonymiseShifts,
@@ -145,7 +145,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { locationId } = body;
+    const locationId = resolveLocationId(caller, body.locationId);
 
     // GDPR — anonymise before sending to Claude
     const { anonymised: anonEmployees, mapping } = anonymiseEmployees(

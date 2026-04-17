@@ -19,6 +19,8 @@ export interface CallerSession {
   role: CallerRole;
   /** Linked employee UUID from user_profiles.employee_id. Null if not linked. */
   employeeId: string | null;
+  /** The branch location_id derived from the caller's employee record. Null if not linked. */
+  locationId: string | null;
 }
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -65,7 +67,34 @@ export async function getCallerSession(req: NextRequest): Promise<CallerSession 
 
   if (!data) return null;
   const row = data as { role: CallerRole; employee_id: string | null };
-  return { userId: user.id, role: row.role, employeeId: row.employee_id };
+
+  let locationId: string | null = null;
+  if (row.employee_id) {
+    const { data: emp } = await serviceClient()
+      .from("employees")
+      .select("location_id")
+      .eq("id", row.employee_id)
+      .single();
+    locationId = (emp as { location_id: string } | null)?.location_id ?? null;
+  }
+
+  return { userId: user.id, role: row.role, employeeId: row.employee_id, locationId };
+}
+
+/**
+ * Resolve the effective locationId for a request.
+ *
+ * - super_admin: trusts the requested locationId (they manage multiple branches).
+ *   Falls back to their own location if none provided.
+ * - Everyone else: always uses their own location from the session, ignoring
+ *   any client-supplied value to prevent cross-branch data access.
+ */
+export function resolveLocationId(
+  caller: CallerSession,
+  requested: string | null | undefined,
+): string | null {
+  if (caller.role === "super_admin") return requested ?? caller.locationId;
+  return caller.locationId;
 }
 
 /** 401 Unauthorised response. */

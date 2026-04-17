@@ -1,6 +1,6 @@
 import { addDays, format } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
-import { getCallerSession, hasRole, unauthorized, forbidden } from "@/lib/api-auth";
+import { getCallerSession, hasRole, unauthorized, forbidden, resolveLocationId } from "@/lib/api-auth";
 import openai, { MODEL } from "@/lib/openai";
 import type { Employee, Shift } from "@/lib/types";
 import { getCachedWeather } from "@/lib/supabase";
@@ -328,7 +328,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const { prompt, weekStart, employees, existingShifts, locationId } = body;
+    const { prompt, weekStart, employees, existingShifts } = body;
+    const locationId = resolveLocationId(caller, body.locationId);
 
     // Fetch weather context
     let weatherContext = "";
