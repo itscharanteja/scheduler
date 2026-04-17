@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { useLocation } from "@/context/LocationContext";
 import {
   createShift,
@@ -859,6 +860,7 @@ function SchedulePageContent() {
         {loading ? (
           <div className="py-14 text-center text-sm text-slate-400">Loading schedule…</div>
         ) : (
+          <ErrorBoundary>
           <div className="overflow-x-auto">
             {/* Time header row */}
             <div className="flex border-b border-slate-200 bg-slate-50/80" style={{ minWidth: 820 }}>
@@ -901,6 +903,7 @@ function SchedulePageContent() {
               )}
             </div>
           </div>
+          </ErrorBoundary>
         )}
       </div>
 
