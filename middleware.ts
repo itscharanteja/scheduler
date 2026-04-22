@@ -37,8 +37,10 @@ export async function middleware(req: NextRequest) {
   const isLoginPage = pathname === "/login";
   const isAuthFlow =
     pathname.startsWith("/auth/") || pathname === "/reset-password";
+  // Kiosk page is intentionally public — it handles its own location scoping
+  const isKiosk = pathname.startsWith("/punch");
 
-  if (!session && !isLoginPage && !isAuthFlow) {
+  if (!session && !isLoginPage && !isAuthFlow && !isKiosk) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 

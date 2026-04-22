@@ -29,3 +29,11 @@ export {
   saveChecklistSubmission,
 } from "./checklists";
 export type { ChecklistTemplate, ChecklistSubmission } from "./checklists";
+export {
+  getEmployeesForKiosk,
+  getActiveSession,
+  clockIn,
+  clockOut,
+  getAttendanceSessions,
+} from "./attendance";
+export type { AttendanceSession, AttendanceSessionWithEmployee, KioskEmployee } from "./attendance";

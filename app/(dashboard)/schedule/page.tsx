@@ -28,6 +28,7 @@ import {
   updateShift,
 } from "@/lib/supabase";
 import type { Employee, Shift, WeatherForecast } from "@/lib/types";
+import type { AttendanceSessionWithEmployee } from "@/lib/supabase/attendance";
 
 // ─── Time / Gantt helpers ──────────────────────────────────────────────────────
 
@@ -543,6 +544,11 @@ function SchedulePageContent() {
   const [weather, setWeather] = useState<WeatherForecast[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Attendance state
+  const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSessionWithEmployee[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [scheduleView, setScheduleView] = useState<"schedule" | "attendance">("schedule");
+
   // Filter state
   const [filterEmployeeIds, setFilterEmployeeIds] = useState<Set<string>>(new Set());
   const [filterRoles, setFilterRoles] = useState<Set<string>>(new Set());
@@ -592,6 +598,28 @@ function SchedulePageContent() {
     })();
     return () => { active = false; };
   }, [weekStart]);
+
+  // Fetch attendance for the selected day (re-runs when day or location changes)
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      setAttendanceLoading(true);
+      try {
+        const params = new URLSearchParams({ from: selectedDay, to: selectedDay });
+        if (locationId) params.set("locationId", locationId);
+        const res = await fetch(`/api/attendance/report?${params}`);
+        if (!res.ok) return;
+        const { sessions } = await res.json();
+        if (!active) return;
+        setAttendanceSessions(sessions ?? []);
+      } catch {
+        // silently fail — attendance is supplementary data
+      } finally {
+        if (active) setAttendanceLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [selectedDay, locationId]);
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
@@ -793,9 +821,9 @@ function SchedulePageContent() {
         {canEdit && weather.length > 0 && <AiSuggestionRow weather={weather} label={t.ai} />}
       </div>
 
-      {/* ── Gantt chart ── */}
+      {/* ── Day panel: Schedule + Attendance tabs ── */}
       <div className="app-panel overflow-hidden">
-        {/* Gantt header */}
+        {/* Panel header */}
         <div className="border-b border-slate-100 px-5 py-3">
           <div className="flex items-center justify-between">
             <div>
@@ -806,21 +834,42 @@ function SchedulePageContent() {
                 </p>
               )}
             </div>
-            {/* Role legend */}
-            <div className="hidden items-center gap-2 sm:flex">
-              {Object.entries(ROLE_PALETTE).map(([role, pal]) => (
-                <span
-                  key={role}
-                  className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize"
-                  style={{ backgroundColor: pal.bg, color: pal.text, borderColor: pal.border }}
-                >
-                  {role}
-                </span>
-              ))}
-            </div>
+            {/* Role legend — only shown in schedule view */}
+            {scheduleView === "schedule" && (
+              <div className="hidden items-center gap-2 sm:flex">
+                {Object.entries(ROLE_PALETTE).map(([role, pal]) => (
+                  <span
+                    key={role}
+                    className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize"
+                    style={{ backgroundColor: pal.bg, color: pal.text, borderColor: pal.border }}
+                  >
+                    {role}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-          {/* Active filter chips */}
-          {(filterEmployeeIds.size > 0 || filterRoles.size > 0) && (
+
+          {/* Tab switcher */}
+          <div className="mt-3 flex gap-1 rounded-lg bg-slate-100 p-1" style={{ width: "fit-content" }}>
+            <button
+              type="button"
+              onClick={() => setScheduleView("schedule")}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${scheduleView === "schedule" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              {lang === "sv" ? "Schema" : "Schedule"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setScheduleView("attendance")}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${scheduleView === "attendance" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              {lang === "sv" ? "Närvaro" : "Attendance"}
+            </button>
+          </div>
+
+          {/* Active filter chips — schedule view only */}
+          {scheduleView === "schedule" && (filterEmployeeIds.size > 0 || filterRoles.size > 0) && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span className="text-[11px] text-slate-400">Showing:</span>
               {Array.from(filterEmployeeIds).map((id) => {
@@ -857,58 +906,253 @@ function SchedulePageContent() {
           )}
         </div>
 
-        {loading ? (
-          <div className="py-14 text-center text-sm text-slate-400">Loading schedule…</div>
-        ) : (
-          <ErrorBoundary>
-          <div className="overflow-x-auto">
-            {/* Time header row */}
-            <div className="flex border-b border-slate-200 bg-slate-50/80" style={{ minWidth: 820 }}>
-              <div className="shrink-0 border-r border-slate-100 px-4 py-2" style={{ width: 220, minWidth: 220 }}>
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Employee</span>
-              </div>
-              <div className="relative flex-1" style={{ height: 28 }}>
-                {HOUR_TICKS.map((h) => (
-                  <div
-                    key={h}
-                    className="absolute top-0 flex h-full items-center"
-                    style={{ left: `${((h - HOUR_START) / (HOUR_END - HOUR_START)) * 100}%` }}
-                  >
-                    <span className="pl-1 text-[10px] text-slate-400">
-                      {String(h).padStart(2, "0")}:00
-                    </span>
+        {/* ── Schedule view (Gantt) ── */}
+        {scheduleView === "schedule" && (
+          loading ? (
+            <div className="py-14 text-center text-sm text-slate-400">Loading schedule…</div>
+          ) : (
+            <ErrorBoundary>
+              <div className="overflow-x-auto">
+                {/* Time header row */}
+                <div className="flex border-b border-slate-200 bg-slate-50/80" style={{ minWidth: 820 }}>
+                  <div className="shrink-0 border-r border-slate-100 px-4 py-2" style={{ width: 220, minWidth: 220 }}>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Employee</span>
                   </div>
-                ))}
+                  <div className="relative flex-1" style={{ height: 28 }}>
+                    {HOUR_TICKS.map((h) => (
+                      <div
+                        key={h}
+                        className="absolute top-0 flex h-full items-center"
+                        style={{ left: `${((h - HOUR_START) / (HOUR_END - HOUR_START)) * 100}%` }}
+                      >
+                        <span className="pl-1 text-[10px] text-slate-400">
+                          {String(h).padStart(2, "0")}:00
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Employee rows */}
+                <div style={{ minWidth: 820 }}>
+                  {sortedEmployees.length === 0 ? (
+                    <div className="py-14 text-center text-sm text-slate-400">{t.noShifts}</div>
+                  ) : (
+                    sortedEmployees.map((emp) => (
+                      <GanttRow
+                        key={emp.id}
+                        employee={emp}
+                        dayShifts={selectedDayShiftsByEmployee.get(emp.id) ?? []}
+                        canEdit={canEdit}
+                        selectedDay={selectedDay}
+                        employees={employees}
+                        onCreated={handleCreate}
+                        onUpdated={handleUpdate}
+                        onDeleted={handleDelete}
+                      />
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
+            </ErrorBoundary>
+          )
+        )}
 
-            {/* Employee rows */}
-            <div style={{ minWidth: 820 }}>
-              {sortedEmployees.length === 0 ? (
-                <div className="py-14 text-center text-sm text-slate-400">{t.noShifts}</div>
-              ) : (
-                sortedEmployees.map((emp) => (
-                  <GanttRow
-                    key={emp.id}
-                    employee={emp}
-                    dayShifts={selectedDayShiftsByEmployee.get(emp.id) ?? []}
-                    canEdit={canEdit}
-                    selectedDay={selectedDay}
-                    employees={employees}
-                    onCreated={handleCreate}
-                    onUpdated={handleUpdate}
-                    onDeleted={handleDelete}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-          </ErrorBoundary>
+        {/* ── Attendance view ── */}
+        {scheduleView === "attendance" && (
+          <AttendanceTabView
+            employees={employees}
+            dayShifts={selectedDayShifts}
+            sessions={attendanceSessions}
+            loading={attendanceLoading || loading}
+            lang={lang}
+          />
         )}
       </div>
 
 
 
+    </div>
+  );
+}
+
+// ─── Attendance tab view ──────────────────────────────────────────────────────
+
+type AttendanceCardState = "complete" | "active" | "no-punch" | "unscheduled";
+
+function getCardState(hasShift: boolean, session: AttendanceSessionWithEmployee | null): AttendanceCardState {
+  if (!hasShift) return "unscheduled";
+  if (!session) return "no-punch";
+  if (!session.clockedOutAt) return "active";
+  return "complete";
+}
+
+function formatPunchTime(iso: string): string {
+  return format(new Date(iso), "HH:mm");
+}
+
+const CARD_STATE_STYLE: Record<AttendanceCardState, {
+  bannerBg: string; bannerBorder: string; bannerText: string; bannerLabel: string;
+  punchBg: string; punchBorder: string; punchText: string; punchLabelColor: string; punchLabel: string;
+}> = {
+  complete: {
+    bannerBg: "#f0fdf4", bannerBorder: "#bbf7d0", bannerText: "#15803d", bannerLabel: "Complete ✓",
+    punchBg: "#f0fdf4", punchBorder: "#bbf7d0", punchText: "#14532d", punchLabelColor: "#15803d", punchLabel: "Clocked in / out",
+  },
+  active: {
+    bannerBg: "#fffbeb", bannerBorder: "#fde68a", bannerText: "#b45309", bannerLabel: "Active shift",
+    punchBg: "#fffbeb", punchBorder: "#fde68a", punchText: "#92400e", punchLabelColor: "#b45309", punchLabel: "Clocked in — still active",
+  },
+  "no-punch": {
+    bannerBg: "#fef2f2", bannerBorder: "#fecaca", bannerText: "#b91c1c", bannerLabel: "Not clocked in",
+    punchBg: "#fef2f2", punchBorder: "#fecaca", punchText: "#ef4444", punchLabelColor: "#b91c1c", punchLabel: "No punch recorded",
+  },
+  unscheduled: {
+    bannerBg: "#f0f9ff", bannerBorder: "#bae6fd", bannerText: "#0369a1", bannerLabel: "Unscheduled",
+    punchBg: "#f0fdf4", punchBorder: "#bbf7d0", punchText: "#14532d", punchLabelColor: "#15803d", punchLabel: "Clocked in / out",
+  },
+};
+
+function AttendanceTabView({
+  employees,
+  dayShifts,
+  sessions,
+  loading,
+  lang,
+}: {
+  employees: Employee[];
+  dayShifts: Shift[];
+  sessions: AttendanceSessionWithEmployee[];
+  loading: boolean;
+  lang: "en" | "sv";
+}) {
+  const employeeMap = new Map(employees.map((e) => [e.id, e]));
+  const sessionByEmployee = new Map(sessions.map((s) => [s.employeeId, s]));
+
+  // One card per unique employee — earliest shift per employee
+  const shiftByEmployee = new Map<string, Shift>();
+  for (const shift of [...dayShifts].sort((a, b) => a.startTime.localeCompare(b.startTime))) {
+    if (!shiftByEmployee.has(shift.employeeId)) shiftByEmployee.set(shift.employeeId, shift);
+  }
+
+  type Row = { employeeId: string; name: string; role: string; shift: Shift | null; session: AttendanceSessionWithEmployee | null };
+  const rows: Row[] = [];
+  const seen = new Set<string>();
+
+  // Employees with shifts (sorted by start time)
+  for (const [empId, shift] of shiftByEmployee) {
+    const emp = employeeMap.get(empId);
+    rows.push({ employeeId: empId, name: emp?.name ?? shift.employeeName, role: emp?.role ?? shift.role, shift, session: sessionByEmployee.get(empId) ?? null });
+    seen.add(empId);
+  }
+
+  // Employees with punch but no shift
+  for (const s of sessions) {
+    if (seen.has(s.employeeId)) continue;
+    rows.push({ employeeId: s.employeeId, name: s.employeeName, role: s.employeeRole, shift: null, session: s });
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-3 p-5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-100" />
+        ))}
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="py-14 text-center text-sm text-slate-400">
+        {lang === "sv" ? "Ingen närvaro registrerad för detta datum." : "No attendance recorded for this day."}
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-slate-100">
+      {rows.map((row) => {
+        const state = getCardState(row.shift !== null, row.session);
+        const style = CARD_STATE_STYLE[state];
+
+        // Scheduled time text
+        const scheduledText = row.shift ? `${row.shift.startTime} – ${row.shift.endTime}` : null;
+
+        // Punch time text
+        let punchText = "—";
+        if (row.session) {
+          const inTime = formatPunchTime(row.session.clockedInAt);
+          punchText = row.session.clockedOutAt
+            ? `${inTime} – ${formatPunchTime(row.session.clockedOutAt)}`
+            : `${inTime} – ${lang === "sv" ? "pågående" : "ongoing"}`;
+        }
+
+        return (
+          <div key={row.employeeId} className="flex items-stretch">
+            {/* Employee name column */}
+            <div
+              className="flex w-44 shrink-0 flex-col justify-center border-r border-slate-100 px-4 py-4"
+              style={{ minWidth: 144 }}
+            >
+              <div className="flex items-center gap-2">
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                  style={{ backgroundColor: avatarColor(row.name) }}
+                >
+                  {initials(row.name)}
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-[13px] font-semibold text-slate-900">{row.name}</div>
+                  <div className="truncate text-[11px] capitalize text-slate-400">{row.role}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: two stacked boxes */}
+            <div className="flex flex-1 flex-col gap-2 px-4 py-3">
+              {/* State banner */}
+              <div
+                className="self-start rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                style={{ backgroundColor: style.bannerBg, color: style.bannerText, border: `1px solid ${style.bannerBorder}` }}
+              >
+                {lang === "sv"
+                  ? { complete: "Klar ✓", active: "Aktivt pass", "no-punch": "Ej instämplad", unscheduled: "Oschemalagd" }[state]
+                  : style.bannerLabel}
+              </div>
+
+              <div className="flex gap-3">
+                {/* Scheduled box */}
+                <div
+                  className="flex-1 rounded-lg px-3 py-2"
+                  style={{ background: "#fafaff", border: "1px solid #e0e7ff" }}
+                >
+                  <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: "#6366f1" }}>
+                    {lang === "sv" ? "Schemalagd tid" : "Scheduled"}
+                  </div>
+                  <div className="mt-0.5 text-[13px] font-bold" style={{ color: scheduledText ? "#312e81" : "#cbd5e1" }}>
+                    {scheduledText ?? (lang === "sv" ? "Ingen tid" : "No shift")}
+                  </div>
+                </div>
+
+                {/* Punch box */}
+                <div
+                  className="flex-1 rounded-lg px-3 py-2"
+                  style={{ background: style.punchBg, border: `1px solid ${style.punchBorder}` }}
+                >
+                  <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: style.punchLabelColor }}>
+                    {lang === "sv"
+                      ? { complete: "In / ut", active: "Incheckad — pågående", "no-punch": "Ingen stämpling", unscheduled: "In / ut" }[state]
+                      : style.punchLabel}
+                  </div>
+                  <div className="mt-0.5 text-[13px] font-bold" style={{ color: style.punchText }}>
+                    {punchText}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

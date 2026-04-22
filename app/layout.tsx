@@ -18,6 +18,10 @@ const dmMono = DM_Mono({
 export const metadata: Metadata = {
   title: "Skift",
   description: "Skift – premium scheduling for teams",
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "default",
+  },
 };
 
 export default function RootLayout({
@@ -27,6 +31,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <meta name="theme-color" content="#0f172a" />
+      </head>
       <body
         className={`${dmSans.variable} ${dmMono.variable} antialiased bg-background text-foreground transition-colors duration-300`}
       >

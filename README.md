@@ -52,6 +52,15 @@ It helps managers run weekly shift planning, manage employee contracts, and gene
 - Pin, edit, soft-delete messages
 - Automatic low-stock alerts posted to managers channel
 
+### Attendance (Punch In / Punch Out)
+- Web-based kiosk at `/punch?loc=<locationId>` — no login required, scoped to one location
+- Employee grid: tap a name → confirm → clock in or out
+- Four card states: complete, active shift, not clocked in, unscheduled
+- Add to Home Screen / PWA support (`app/manifest.ts`) for quick kiosk access
+- **Web Punch** link in the sidebar (admin only) opens the kiosk in a new tab pre-filled with the admin's location
+- Schedule page Attendance tab: toggle between Gantt and per-employee scheduled vs. actual punch time for the selected day
+- Admin attendance report at `/attendance` with date range and employee filters, total hours summary
+
 ### Operations
 - Shift leader logs (narrative daily logs)
 - Task board
@@ -155,6 +164,7 @@ Run migrations in order from `supabase/migrations/`:
 15. `015_channel_created_by.sql` — channel ownership for permission enforcement
 16. `016_shift_checklists.sql` — shift leader checklist templates and submissions
 17. `017_multi_location.sql` — multi-location branch support
+18. `018_attendance.sql` — attendance_sessions table for punch in/out tracking
 
 ### 4. Start development server
 

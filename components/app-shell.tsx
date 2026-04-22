@@ -13,6 +13,8 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  Clock,
+  ExternalLink,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -162,6 +164,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
           { href: "/inventory", label: lang === "sv" ? "Lager" : "Inventory", icon: Package, roles: ["user_lead", "admin", "super_admin"] },
           { href: "/reports", label: lang === "sv" ? "Rapporter" : "Reports", icon: ChartNoAxesCombined, roles: ["user_lead", "admin", "super_admin"] },
           { href: "/employees", label: lang === "sv" ? "Team" : "Team", icon: Users, roles: ["admin", "super_admin"] },
+          { href: "/attendance", label: lang === "sv" ? "Närvaro" : "Attendance", icon: Clock, roles: ["admin", "super_admin"] },
           { href: "/ai-agent", label: lang === "sv" ? "AI-optimering" : "AI Optimisation", icon: Bot, roles: ["admin", "super_admin"] },
           { href: "/settings", label: lang === "sv" ? "Inställningar" : "Settings", icon: Settings, roles: ["admin", "super_admin"] },
         ] satisfies NavItem[]
@@ -285,6 +288,21 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               })}
             </div>
           </div>
+
+          {hasRole("admin", "super_admin") && locationId && (
+            <div className="px-3 pb-2">
+              <a
+                href={`/punch?loc=${locationId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <span className="flex-1">{lang === "sv" ? "Web-punch" : "Web Punch"}</span>
+                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              </a>
+            </div>
+          )}
 
           {user && (
             <div className="app-panel-muted p-3">
