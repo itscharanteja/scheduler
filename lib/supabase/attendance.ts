@@ -104,6 +104,37 @@ export async function clockIn(employeeId: string, locationId: string): Promise<A
 }
 
 /**
+ * Updates clocked_in_at and/or clocked_out_at on a session.
+ * The locationId is required for security — only sessions belonging to that location are updated.
+ * Returns null if the session was not found or does not belong to the location.
+ */
+export async function updateAttendanceSession(
+  sessionId: string,
+  locationId: string,
+  updates: { clockedInAt?: string; clockedOutAt?: string | null },
+): Promise<AttendanceSession | null> {
+  try {
+    const dbUpdates: Record<string, string | null> = {};
+    if (updates.clockedInAt !== undefined) dbUpdates.clocked_in_at = updates.clockedInAt;
+    if (updates.clockedOutAt !== undefined) dbUpdates.clocked_out_at = updates.clockedOutAt;
+
+    if (Object.keys(dbUpdates).length === 0) return null;
+
+    const { data, error } = await serviceClient()
+      .from("attendance_sessions")
+      .update(dbUpdates)
+      .eq("id", sessionId)
+      .eq("location_id", locationId)
+      .select("*")
+      .maybeSingle();
+    if (error) throw error;
+    return data ? mapSession(data as DbSessionRow) : null;
+  } catch (error) {
+    throw normalizeSupabaseError(error, "updateAttendanceSession");
+  }
+}
+
+/**
  * Sets clocked_out_at on the given session. Returns the updated session.
  */
 export async function clockOut(sessionId: string): Promise<AttendanceSession> {

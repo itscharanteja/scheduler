@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { format, startOfWeek, endOfWeek, differenceInMinutes } from "date-fns";
-import { Clock, RefreshCw, Filter } from "lucide-react";
+import { Clock, RefreshCw, Filter, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +58,13 @@ export default function AttendancePage() {
   const [to, setTo] = useState(defaultTo);
   const [employeeFilter, setEmployeeFilter] = useState("all");
 
+  // Inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editIn, setEditIn] = useState("");
+  const [editOut, setEditOut] = useState("");
+  const [saving, setSaving] = useState(false);
+
   // Redirect non-admins
   if (!hasRole("admin", "super_admin")) {
     return (
@@ -110,6 +117,42 @@ export default function AttendancePage() {
     });
     return map;
   }, [filtered]);
+
+  function startEdit(s: AttendanceSessionWithEmployee) {
+    setEditingId(s.id);
+    setEditDate(format(new Date(s.clockedInAt), "yyyy-MM-dd"));
+    setEditIn(format(new Date(s.clockedInAt), "HH:mm"));
+    setEditOut(s.clockedOutAt ? format(new Date(s.clockedOutAt), "HH:mm") : "");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function saveEdit(s: AttendanceSessionWithEmployee) {
+    if (!editIn) {
+      toast.error("Clock-in time is required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const clockedInAt = new Date(`${editDate}T${editIn}`).toISOString();
+      const clockedOutAt = editOut ? new Date(`${editDate}T${editOut}`).toISOString() : null;
+      const res = await fetch("/api/attendance/report", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: s.id, clockedInAt, clockedOutAt }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      toast.success(lang === "sv" ? "Uppdaterad" : "Updated");
+      setEditingId(null);
+      load();
+    } catch {
+      toast.error(lang === "sv" ? "Kunde inte spara ändringar" : "Could not save changes");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="app-panel flex flex-col gap-4 p-5">
@@ -197,33 +240,93 @@ export default function AttendancePage() {
                   {lang === "sv" ? "Tid" : "Duration"}
                 </th>
                 <th className="px-4 py-2.5 text-left font-medium">Status</th>
+                <th className="px-4 py-2.5 text-left font-medium"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((s) => (
-                <tr key={s.id} className="bg-white hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-2.5 font-medium text-slate-800">{s.employeeName}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{formatDateShort(s.clockedInAt)}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{formatTimeShort(s.clockedInAt)}</td>
-                  <td className="px-4 py-2.5 text-slate-600">
-                    {s.clockedOutAt ? formatTimeShort(s.clockedOutAt) : "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-600">
-                    {calcDuration(s.clockedInAt, s.clockedOutAt)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {!s.clockedOutAt ? (
-                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-xs">
-                        {lang === "sv" ? "Aktiv" : "Active"}
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-slate-100 text-slate-500 hover:bg-slate-100 text-xs">
-                        {lang === "sv" ? "Avslutad" : "Done"}
-                      </Badge>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((s) => {
+                const isEditing = editingId === s.id;
+                return (
+                  <tr key={s.id} className={`transition-colors ${isEditing ? "bg-blue-50" : "bg-white hover:bg-slate-50"}`}>
+                    <td className="px-4 py-2.5 font-medium text-slate-800">{s.employeeName}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{formatDateShort(s.clockedInAt)}</td>
+                    <td className="px-4 py-2.5 text-slate-600">
+                      {isEditing ? (
+                        <input
+                          type="time"
+                          value={editIn}
+                          onChange={(e) => setEditIn(e.target.value)}
+                          className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        />
+                      ) : (
+                        formatTimeShort(s.clockedInAt)
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600">
+                      {isEditing ? (
+                        <input
+                          type="time"
+                          value={editOut}
+                          onChange={(e) => setEditOut(e.target.value)}
+                          className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        />
+                      ) : (
+                        s.clockedOutAt ? formatTimeShort(s.clockedOutAt) : "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600">
+                      {calcDuration(s.clockedInAt, s.clockedOutAt)}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {!s.clockedOutAt ? (
+                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-xs">
+                          {lang === "sv" ? "Aktiv" : "Active"}
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-slate-100 text-slate-500 hover:bg-slate-100 text-xs">
+                          {lang === "sv" ? "Avslutad" : "Done"}
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={() => saveEdit(s)}
+                            disabled={saving}
+                            title={lang === "sv" ? "Spara" : "Save"}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-slate-500 hover:text-slate-700"
+                            onClick={cancelEdit}
+                            disabled={saving}
+                            title={lang === "sv" ? "Avbryt" : "Cancel"}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-slate-400 hover:text-slate-600"
+                          onClick={() => startEdit(s)}
+                          title={lang === "sv" ? "Redigera tider" : "Edit times"}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

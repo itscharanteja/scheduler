@@ -35,5 +35,6 @@ export {
   clockIn,
   clockOut,
   getAttendanceSessions,
+  updateAttendanceSession,
 } from "./attendance";
 export type { AttendanceSession, AttendanceSessionWithEmployee, KioskEmployee } from "./attendance";
