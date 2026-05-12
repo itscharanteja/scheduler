@@ -282,3 +282,112 @@ export interface FeedReport {
   postContent?: string;
   postAuthorName?: string;
 }
+
+// ─── Custom Forms ─────────────────────────────────────────────────────────────
+
+export type FieldType = "text" | "number" | "checkbox" | "date" | "select";
+
+export type TextFieldConfig = {
+  type: "text";
+  placeholder?: string;
+  multiline?: boolean;
+};
+
+export type NumberFieldConfig = {
+  type: "number";
+  min?: number;
+  max?: number;
+  unit?: string;
+};
+
+export type CheckboxFieldConfig = {
+  type: "checkbox";
+};
+
+export type DateFieldConfig = {
+  type: "date";
+};
+
+export type SelectFieldConfig = {
+  type: "select";
+  options?: string[];
+  linked_source?: "employees" | "inventory";
+};
+
+export type FieldConfig =
+  | TextFieldConfig
+  | NumberFieldConfig
+  | CheckboxFieldConfig
+  | DateFieldConfig
+  | SelectFieldConfig;
+
+export interface CustomFormField {
+  id: string;
+  formId: string;
+  label: string;
+  fieldType: FieldType;
+  config: FieldConfig;
+  orderIndex: number;
+  isRequired: boolean;
+  createdAt: string;
+}
+
+export interface CustomForm {
+  id: string;
+  locationId: string;
+  name: string;
+  description: string;
+  isActive: boolean;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  fieldCount?: number;
+  lastSubmittedAt?: string | null;
+}
+
+export interface CustomFormWithFields extends CustomForm {
+  fields: CustomFormField[];
+}
+
+export interface CustomFormSubmission {
+  id: string;
+  formId: string;
+  locationId: string;
+  submittedBy: string | null;
+  submittedByName?: string | null;
+  date: string;
+  createdAt: string;
+}
+
+export interface FormResponse {
+  id: string;
+  submissionId: string;
+  fieldId: string;
+  fieldLabel?: string;
+  value: unknown;
+  createdAt: string;
+}
+
+export interface CustomFormSubmissionWithResponses extends CustomFormSubmission {
+  responses: FormResponse[];
+}
+
+export interface DraftFieldInput {
+  label: string;
+  fieldType: FieldType;
+  config: FieldConfig;
+  orderIndex: number;
+  isRequired: boolean;
+}
+
+export interface UpdateFormPayload {
+  name?: string;
+  description?: string;
+  isActive?: boolean;
+  fields?: DraftFieldInput[];
+}
+
+export interface SubmitFormPayload {
+  date: string;
+  responses: Array<{ fieldId: string; value: unknown }>;
+}

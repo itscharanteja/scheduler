@@ -38,3 +38,13 @@ export {
   updateAttendanceSession,
 } from "./attendance";
 export type { AttendanceSession, AttendanceSessionWithEmployee, KioskEmployee } from "./attendance";
+export {
+  getForms,
+  getForm,
+  createForm,
+  updateForm,
+  deleteForm,
+  submitForm,
+  getFormSubmissions,
+  getFormSubmission,
+} from "./forms";
