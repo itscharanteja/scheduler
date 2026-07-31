@@ -66,27 +66,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    supabaseClient.auth.getUser().then(async ({ data: { user } }) => {
-      if (user) {
-        const profile = await fetchProfile(user.id, user.email ?? "");
-        setUser(profile);
-      }
-      setLoading(false);
-    });
+    // supabase-js fires onAuthStateChange once immediately on subscribe (with the
+    // current session, or null), so a separate initial getUser() call here would
+    // just duplicate that first event. We rely on this single listener for both
+    // the initial load and subsequent auth changes.
+    let lastVerifiedUserId: string | null = null;
 
     const {
       data: { subscription },
-    } = supabaseClient.auth.onAuthStateChange(async (_event, session) => {
-      if (session) {
-        // Re-verify with getUser() — do not trust session.user directly
-        const { data: { user } } = await supabaseClient!.auth.getUser();
-        if (user) {
-          const profile = await fetchProfile(user.id, user.email ?? "");
-          setUser(profile);
-        } else {
-          setUser(null);
-        }
+    } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
+      if (!session) {
+        lastVerifiedUserId = null;
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      // A token refresh for the same user doesn't require re-verifying identity
+      // or re-fetching the profile again.
+      if (event === "TOKEN_REFRESHED" && session.user.id === lastVerifiedUserId) {
+        setLoading(false);
+        return;
+      }
+
+      // Re-verify with getUser() — do not trust session.user directly
+      const { data: { user } } = await supabaseClient!.auth.getUser();
+      if (user) {
+        lastVerifiedUserId = user.id;
+        const profile = await fetchProfile(user.id, user.email ?? "");
+        setUser(profile);
       } else {
+        lastVerifiedUserId = null;
         setUser(null);
       }
       setLoading(false);

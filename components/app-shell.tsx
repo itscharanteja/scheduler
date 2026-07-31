@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -45,6 +45,18 @@ type NavItem = {
   /** If set, only users with one of these roles see this item. */
   roles?: UserRole[];
 };
+
+interface ShellData {
+  employees: Employee[];
+  unreadChatCount: number;
+}
+
+const ShellDataContext = createContext<ShellData>({ employees: [], unreadChatCount: 0 });
+
+/** Reuse employees/unread-count already fetched by the app shell instead of re-fetching per page. */
+export function useShellData() {
+  return useContext(ShellDataContext);
+}
 
 function getPageMeta(pathname: string, lang: "en" | "sv") {
   const copy =
@@ -219,6 +231,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   return (
+    <ShellDataContext.Provider value={{ employees, unreadChatCount }}>
     <div className="app-shell">
       <div className="app-grid">
         <aside className="app-sidebar">
@@ -479,6 +492,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
       </nav>
 
     </div>
+    </ShellDataContext.Provider>
   );
 }
 

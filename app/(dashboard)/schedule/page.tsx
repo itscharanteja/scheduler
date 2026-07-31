@@ -20,10 +20,10 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useLocation } from "@/context/LocationContext";
+import { useShellData } from "@/components/app-shell";
 import {
   createShift,
   deleteShift,
-  getEmployees,
   getShiftsByWeek,
   updateShift,
 } from "@/lib/supabase";
@@ -539,7 +539,7 @@ function SchedulePageContent() {
   // Default to today, not week-start Monday
   const selectedDay = dayParam ?? todayStr;
 
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const { employees } = useShellData();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [weather, setWeather] = useState<WeatherForecast[]>([]);
   const [loading, setLoading] = useState(true);
@@ -583,13 +583,11 @@ function SchedulePageContent() {
     (async () => {
       setLoading(true);
       try {
-        const [emps, schedule, weatherRes] = await Promise.all([
-          getEmployees(locationId),
+        const [schedule, weatherRes] = await Promise.all([
           getShiftsByWeek(weekStart, locationId),
           fetch(`/api/weather?locationId=${locationId}`).then((r) => r.json()).catch(() => ({ forecasts: [] })),
         ]);
         if (!active) return;
-        setEmployees(emps);
         setShifts(schedule.shifts);
         setWeather(Array.isArray(weatherRes.forecasts) ? weatherRes.forecasts.slice(0, 3) : []);
       } finally {

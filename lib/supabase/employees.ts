@@ -36,7 +36,7 @@ export async function getEmployees(locationId?: string): Promise<Employee[]> {
       const all = getRuntimeStore().employees.slice().sort((a, b) => a.name.localeCompare(b.name));
       return locationId ? all.filter((e) => e.locationId === locationId) : all;
     }
-    let query = supabaseClient.from("employees").select("*").order("name", { ascending: true });
+    let query = supabaseClient.from("employees").select("*").order("name", { ascending: true }).limit(500);
     if (locationId) query = query.eq("location_id", locationId);
     const { data, error } = await query;
     if (error) throw error;

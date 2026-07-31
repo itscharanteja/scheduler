@@ -15,11 +15,10 @@ import {
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLocation } from "@/context/LocationContext";
+import { useShellData } from "@/components/app-shell";
 import {
-  getEmployees,
   getShiftsByWeek,
   getTasks,
-  getChannels,
   getSales,
   getAlerts,
   getActivity,
@@ -50,10 +49,10 @@ export default function DashboardPage() {
   const { user, hasRole } = useAuth();
   const { locationId } = useLocation();
   const isBasicUser = !hasRole("user_lead", "admin", "super_admin");
-  const [employeesCount, setEmployeesCount] = useState(0);
+  const { employees: shellEmployees, unreadChatCount } = useShellData();
+  const employeesCount = shellEmployees.length;
   const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
-  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [todaySales, setTodaySales] = useState<SalesDay | null>(null);
   const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
   const [activity, setActivity] = useState<EmployeeActivityItem[]>([]);
@@ -71,32 +70,21 @@ export default function DashboardPage() {
       try {
         setLoading(true);
         const [
-          employees,
           schedule,
           shiftLogs,
-          channels,
           sales,
           alertData,
           activityData,
         ] = await Promise.all([
-          getEmployees(locationId),
           getShiftsByWeek(weekStart, locationId),
           getTasks(locationId),
-          getChannels(locationId),
           getSales(locationId, 1),
           getAlerts(locationId),
           getActivity(locationId, 5),
         ]);
         if (!active) return;
-        setEmployeesCount(employees.length);
         setWeekShifts(schedule.shifts);
         setLogs(shiftLogs);
-        setUnreadChatCount(
-          (channels as any[]).reduce(
-            (sum, ch) => sum + (ch.unread_count ?? 0),
-            0,
-          ),
-        );
         setTodaySales(sales[0] ?? null);
         setAlerts(alertData);
         setActivity(activityData);
