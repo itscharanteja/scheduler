@@ -12,12 +12,8 @@ import { useLocation } from "@/context/LocationContext";
 import { useLanguage } from "@/context/LanguageContext";
 import type { AttendanceSessionWithEmployee } from "@/lib/supabase/attendance";
 
-function formatTimeShort(iso: string) {
-  return format(new Date(iso), "HH:mm");
-}
-
-function formatDateShort(iso: string) {
-  return format(new Date(iso), "MMM d");
+function formatDateTimeShort(iso: string) {
+  return format(new Date(iso), "MMM d, HH:mm");
 }
 
 function calcDuration(clockedInAt: string, clockedOutAt: string | null): string {
@@ -47,6 +43,7 @@ export default function AttendancePage() {
   const { hasRole } = useAuth();
   const { locationId } = useLocation();
   const { lang } = useLanguage();
+  const isAdmin = hasRole("admin", "super_admin");
 
   const now = new Date();
   const defaultFrom = format(startOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd");
@@ -60,21 +57,11 @@ export default function AttendancePage() {
 
   // Inline edit state
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDate, setEditDate] = useState("");
-  const [editIn, setEditIn] = useState("");
-  const [editOut, setEditOut] = useState("");
+  const [editInDate, setEditInDate] = useState("");
+  const [editInTime, setEditInTime] = useState("");
+  const [editOutDate, setEditOutDate] = useState("");
+  const [editOutTime, setEditOutTime] = useState("");
   const [saving, setSaving] = useState(false);
-
-  // Redirect non-admins
-  if (!hasRole("admin", "super_admin")) {
-    return (
-      <div className="app-panel px-5 py-16 text-center">
-        <p className="text-sm text-slate-500">
-          {lang === "sv" ? "Åtkomst nekad." : "Access denied."}
-        </p>
-      </div>
-    );
-  }
 
   async function load() {
     setLoading(true);
@@ -93,7 +80,7 @@ export default function AttendancePage() {
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [locationId, from, to]);
+  useEffect(() => { if (isAdmin) load(); }, [isAdmin, locationId, from, to]);
 
   // Unique employee names for filter dropdown
   const employeeNames = useMemo(() => {
@@ -120,9 +107,10 @@ export default function AttendancePage() {
 
   function startEdit(s: AttendanceSessionWithEmployee) {
     setEditingId(s.id);
-    setEditDate(format(new Date(s.clockedInAt), "yyyy-MM-dd"));
-    setEditIn(format(new Date(s.clockedInAt), "HH:mm"));
-    setEditOut(s.clockedOutAt ? format(new Date(s.clockedOutAt), "HH:mm") : "");
+    setEditInDate(format(new Date(s.clockedInAt), "yyyy-MM-dd"));
+    setEditInTime(format(new Date(s.clockedInAt), "HH:mm"));
+    setEditOutDate(format(new Date(s.clockedOutAt ?? s.clockedInAt), "yyyy-MM-dd"));
+    setEditOutTime(s.clockedOutAt ? format(new Date(s.clockedOutAt), "HH:mm") : "");
   }
 
   function cancelEdit() {
@@ -130,14 +118,21 @@ export default function AttendancePage() {
   }
 
   async function saveEdit(s: AttendanceSessionWithEmployee) {
-    if (!editIn) {
-      toast.error("Clock-in time is required.");
+    if (!editInDate || !editInTime) {
+      toast.error("Clock-in date and time are required.");
+      return;
+    }
+    const clockedInAt = new Date(`${editInDate}T${editInTime}`).toISOString();
+    const clockedOutAt =
+      editOutTime && editOutDate ? new Date(`${editOutDate}T${editOutTime}`).toISOString() : null;
+    if (clockedOutAt && clockedOutAt <= clockedInAt) {
+      toast.error(
+        lang === "sv" ? "Utcheckning måste ske efter incheckning." : "Clock-out must be after clock-in.",
+      );
       return;
     }
     setSaving(true);
     try {
-      const clockedInAt = new Date(`${editDate}T${editIn}`).toISOString();
-      const clockedOutAt = editOut ? new Date(`${editDate}T${editOut}`).toISOString() : null;
       const res = await fetch("/api/attendance/report", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -152,6 +147,16 @@ export default function AttendancePage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="app-panel px-5 py-16 text-center">
+        <p className="text-sm text-slate-500">
+          {lang === "sv" ? "Åtkomst nekad." : "Access denied."}
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -228,9 +233,6 @@ export default function AttendancePage() {
                   {lang === "sv" ? "Anställd" : "Employee"}
                 </th>
                 <th className="px-4 py-2.5 text-left font-medium">
-                  {lang === "sv" ? "Datum" : "Date"}
-                </th>
-                <th className="px-4 py-2.5 text-left font-medium">
                   {lang === "sv" ? "Incheckad" : "Clocked In"}
                 </th>
                 <th className="px-4 py-2.5 text-left font-medium">
@@ -249,29 +251,44 @@ export default function AttendancePage() {
                 return (
                   <tr key={s.id} className={`transition-colors ${isEditing ? "bg-blue-50" : "bg-white hover:bg-slate-50"}`}>
                     <td className="px-4 py-2.5 font-medium text-slate-800">{s.employeeName}</td>
-                    <td className="px-4 py-2.5 text-slate-600">{formatDateShort(s.clockedInAt)}</td>
                     <td className="px-4 py-2.5 text-slate-600">
                       {isEditing ? (
-                        <input
-                          type="time"
-                          value={editIn}
-                          onChange={(e) => setEditIn(e.target.value)}
-                          className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                        />
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="date"
+                            value={editInDate}
+                            onChange={(e) => setEditInDate(e.target.value)}
+                            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          />
+                          <input
+                            type="time"
+                            value={editInTime}
+                            onChange={(e) => setEditInTime(e.target.value)}
+                            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          />
+                        </div>
                       ) : (
-                        formatTimeShort(s.clockedInAt)
+                        formatDateTimeShort(s.clockedInAt)
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">
                       {isEditing ? (
-                        <input
-                          type="time"
-                          value={editOut}
-                          onChange={(e) => setEditOut(e.target.value)}
-                          className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                        />
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="date"
+                            value={editOutDate}
+                            onChange={(e) => setEditOutDate(e.target.value)}
+                            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          />
+                          <input
+                            type="time"
+                            value={editOutTime}
+                            onChange={(e) => setEditOutTime(e.target.value)}
+                            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          />
+                        </div>
                       ) : (
-                        s.clockedOutAt ? formatTimeShort(s.clockedOutAt) : "—"
+                        s.clockedOutAt ? formatDateTimeShort(s.clockedOutAt) : "—"
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">
