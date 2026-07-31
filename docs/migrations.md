@@ -23,5 +23,6 @@ Run all migrations in order via Supabase Dashboard → SQL Editor.
 | 017 | `017_multi_location.sql` | ✅ Applied | multi-location branch support |
 | 018 | `018_attendance.sql` | ✅ Applied | attendance_sessions (punch in/out) |
 | 019 | `019_custom_forms.sql` | ⚠️ **Pending** | custom_forms, custom_form_fields, custom_form_submissions, custom_form_responses |
+| 020 | `020_weather_cache.sql` | ⚠️ **Pending** | weather_cache table (was referenced by `lib/supabase/weather.ts` but never created — caused `PGRST204` errors on every weather write) |
 
-**019 must be run before the Forms feature works.**
+**019 must be run before the Forms feature works. 020 must be run before weather caching works (until then, `/api/weather` silently falls back to mock data).**

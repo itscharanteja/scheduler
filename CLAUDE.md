@@ -125,15 +125,21 @@ app/
   (dashboard)/
     layout.tsx            — wraps children in LanguageAppShell
     page.tsx              — /
-    schedule/             — /schedule
-    logs/                 — /logs (tasks)
+    schedule/             — /schedule (incl. schedule/day)
+    logs/                 — /logs (task board, queries `tasks` table)
+    shift-logs/           — /shift-logs (narrative logs + checklists)
     chat/                 — /chat
-    sales/                — /sales
-    inventory/            — /inventory
+    sales/                — /sales (STUB — "Coming soon", see Notes for Future Work)
+    inventory/             — /inventory (STUB — "Coming soon", see Notes for Future Work)
     reports/              — /reports
-    employees/            — /employees
+    employees/            — /employees, /employees/[id]
+    attendance/           — /attendance (admin punch report)
+    forms/                — /forms, /forms/[id], /forms/[id]/edit, /forms/[id]/submissions
+    feed/                 — /feed, /feed/reports
     ai-agent/             — /ai-agent
     settings/             — /settings
+  (kiosk)/
+    punch/                — /punch (public punch in/out kiosk, no login)
   auth/
     confirm/route.ts      — /auth/confirm (code exchange for password reset)
 ```
@@ -166,12 +172,33 @@ All API routes follow the pattern `/app/api/{feature}/{action}/route.ts`:
   - POST /api/shift-logs/create
   - PATCH /api/shift-logs/update
 
-- **Inventory** (`/api/inventory/*`): Stock management with auto-alerts
+- **Inventory** (`/api/inventory/*`): Stock management with auto-alerts. API is complete, but the `/inventory` page UI is still a stub — see Notes for Future Work.
   - GET /api/inventory (all items), /api/inventory/low (alert items)
   - POST /api/inventory/update (triggers alert to managers chat if stock drops below critical)
 
-- **Sales** (`/api/sales`): Daily sales data
+- **Sales** (`/api/sales`): Daily sales data. API is complete (also consumed by `/reports`), but the `/sales` page UI is still a stub — see Notes for Future Work.
   - GET /api/sales?locationId=&limit=
+
+- **Attendance** (`/api/punch/*`, `/api/attendance/*`): Employee punch in/out
+  - GET/POST /api/punch — kiosk clock in/out (public, no auth)
+  - GET /api/punch/employees, /api/punch/status
+  - GET/PATCH /api/attendance/report — admin report with inline time editing
+
+- **Custom Forms** (`/api/forms/*`): Admin-built forms with typed fields (text/number/checkbox/date/select, static or linked to employees/inventory)
+  - GET/POST /api/forms, GET/PUT/DELETE /api/forms/[id]
+  - POST /api/forms/[id]/submit, GET /api/forms/[id]/submissions
+  - Requires migration `019_custom_forms.sql` — not yet applied (see Supabase Migrations)
+
+- **Social Feed** (`/api/feed/*`): Posts, comments, likes, reports
+  - GET/POST /api/feed, GET/PATCH/DELETE /api/feed/[id]
+  - POST /api/feed/[id]/comments, /api/feed/[id]/like, /api/feed/[id]/report
+  - GET /api/feed/reports
+
+- **Notifications** (`/api/notifications`): GET/POST/PATCH/DELETE — ⚠️ persisted in an in-memory `globalThis` store (`lib/server/runtime-store.ts`), not Supabase; does not survive a restart/redeploy.
+
+- **Settings** (`/api/settings`): GET/PUT — same ⚠️ in-memory persistence caveat as Notifications.
+
+- **Admin** (`/api/admin/invite-employee`): GET (check) / POST (invite) — creates a Supabase Auth user + user_profiles row, admin/super_admin only.
 
 - **Alerts** (`/api/alerts`): Dashboard alerts
   - GET /api/alerts?locationId=
@@ -185,20 +212,21 @@ All API routes follow the pattern `/app/api/{feature}/{action}/route.ts`:
   - POST /api/generate-schedule-openai (OpenAI alternative)
   - Both include weather context injection and return warnings/violations
 
-- **Weather** (`/api/weather/*`): Forecast data
-  - GET /api/weather (cached forecasts)
+- **Weather** (`/api/weather/*`): Forecast data. Uses OpenWeather One Call API 4.0 (`/data/4.0/onecall/current` + `/data/4.0/onecall/timeline/1day`), env var `OPENWEATHER_API_KEY` (server-only, no `NEXT_PUBLIC_` prefix).
+  - GET /api/weather (cached forecasts, falls back to mock data if uncached/unconfigured)
   - POST /api/weather/refresh (fetch from OpenWeather API)
+  - Requires migration `020_weather_cache.sql` — not yet applied (see Supabase Migrations); until it is, every write fails and the route silently falls back to mock data.
 
 ### Data Layer Pattern
 
-**`lib/supabase.ts`** is the single source of truth for Supabase queries:
+**`lib/supabase/`** is the single source of truth for Supabase queries — a directory of domain modules (`employees.ts`, `shifts.ts`, `inventory.ts`, `sales.ts`, `chat.ts`, `weather.ts`, `attendance.ts`, `forms.ts`, `checklists.ts`, `tasks.ts`, `shift-logs.ts`, `alerts.ts`, `activity.ts`, `locations.ts`) re-exported through `lib/supabase/index.ts`. Import from `@/lib/supabase`, not a specific submodule.
 
-- Creates and caches `supabaseClient` (anon key auth)
-- Provides helper `requireClient()` for auth-required operations
+- `lib/supabase/client.ts` creates and caches `supabaseClient` (anon key auth) and provides `requireClient()` for auth-required operations
 - Type mapping functions convert snake_case DB rows to camelCase app types:
   - `mapEmployee()`, `mapShift()`, `mapInventoryItem()`, `mapDailySales()`, `mapDashboardAlert()`, `mapEmployeeActivity()`, etc.
 - Wraps all queries with error handling and logging
 - Exports both queries and mutations with consistent patterns
+- `lib/api-auth.ts` handles server-side session/role checks and provides `serviceClient` for admin-privileged routes (bypasses RLS)
 
 Example pattern:
 
@@ -244,9 +272,10 @@ All types match the Supabase schema (mapping handled in supabase.ts).
 
 **`lib/weather.ts`** — Weather forecast integration:
 
+- `fetchWeatherFromAPI()` — OpenWeather One Call API 4.0: `timeline/1day` for the 7-day forecast, `current` for today's live snapshot (overrides today's condition/wind/UV)
 - `getMockWeather()` — fallback data when API unavailable
 - `WeatherForecast` type includes staffingSuggestion and inventorySuggestion
-- Caching in Supabase, refresh via POST /api/weather/refresh
+- Caching in Supabase (`weather_cache` table, migration 020 — not yet applied), refresh via POST /api/weather/refresh
 
 ### Cross-Module Triggers
 
@@ -262,9 +291,10 @@ Copy `.env.local.example` to `.env.local`:
 ```
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...             (server-only, bypasses RLS — used by admin/invite-employee)
 ANTHROPIC_API_KEY=...
-OPENAI_API_KEY=... (optional, for OpenAI route)
-NEXT_PUBLIC_OPENWEATHER_API_KEY=... (optional, for weather)
+OPENAI_API_KEY=...                        (optional, for OpenAI route)
+OPENWEATHER_API_KEY=...                   (optional, for weather — server-only, no NEXT_PUBLIC_ prefix)
 ```
 
 If Supabase vars are missing, the app shows warnings, disables data actions (graceful degradation), and `hasRole()` returns `true` for everything (dev bypass).
@@ -288,6 +318,13 @@ Run in order from `supabase/migrations/`:
 13. `013_user_profiles_email.sql` — email column on user_profiles
 14. `014_chat_features.sql` — adds is_pinned, is_edited, edited_at, is_deleted to chat_messages; creates channel_members table
 15. `015_channel_created_by.sql` — adds created_by to chat_channels for permission enforcement
+16. `016_shift_checklists.sql` — shift leader checklist templates + submissions
+17. `017_multi_location.sql` — multi-location branch support
+18. `018_attendance.sql` — attendance_sessions table (punch in/out)
+19. `019_custom_forms.sql` — custom_forms, custom_form_fields, custom_form_submissions, custom_form_responses — **⚠️ not yet applied to the DB**
+20. `020_weather_cache.sql` — weather_cache table — **⚠️ not yet applied to the DB**
+
+See `docs/migrations.md` for current applied/pending status.
 
 ### shift_logs vs tasks
 
@@ -351,8 +388,8 @@ Run with: `npm run dev` then `./tests/script.sh` (adjust `BASE_URL`, `LOCATION_I
 
 ## Data Layer Rules
 
-- **Always verify actual DB column names** before writing a new `mapX()` function or Supabase query. Read the migration files in `supabase/migrations/` or check existing `DbXRow` types in `lib/supabase.ts`. Do NOT assume field names from the TypeScript type — the DB uses `snake_case` and the app uses `camelCase`, and they don't always match predictably (e.g. `sender_id` not `employee_id`, `message` not `content`).
-- **All Supabase queries go in `lib/supabase.ts`** — never query Supabase directly from a page or API route.
+- **Always verify actual DB column names** before writing a new `mapX()` function or Supabase query. Read the migration files in `supabase/migrations/` or check existing `DbXRow` types in the relevant `lib/supabase/*.ts` module. Do NOT assume field names from the TypeScript type — the DB uses `snake_case` and the app uses `camelCase`, and they don't always match predictably (e.g. `sender_id` not `employee_id`, `message` not `content`).
+- **All Supabase queries go in `lib/supabase/*.ts`** — never query Supabase directly from a page or API route.
 - **`LOCATION_ID`** is defined in `lib/constants.ts` (`"22222222-2222-4222-8222-222222222222"`) and must be passed to every location-scoped query. Missing it causes silently empty results.
 - **Relational joins**: `chat_messages.sender_id` → `employees.id`. Always join `employees(name, role)` when fetching messages to get sender info.
 - **Ambiguous FK joins**: `channel_members` has two FKs to `employees` (`employee_id` and `added_by`). Always use the explicit hint form: `employees!channel_members_employee_id_fkey(name, role)` — not just `employees(name, role)`.
@@ -360,13 +397,13 @@ Run with: `npm run dev` then `./tests/script.sh` (adjust `BASE_URL`, `LOCATION_I
 
 ## Real Data Sources
 
-All data is now backed by real Supabase tables. Use these functions (all in `lib/supabase.ts`):
+All data is now backed by real Supabase tables. Use these functions (all in `lib/supabase/`, re-exported via `lib/supabase/index.ts`):
 
 | Data                | Function(s)                                      |
 | ------------------- | ------------------------------------------------ |
 | Employees           | `getEmployees()`                                 |
 | Shifts              | `getShiftsByWeek(weekStart)`                     |
-| Tasks (task board)  | `getShiftLogs(locationId)` — queries tasks table |
+| Tasks (task board)  | `getTasks(locationId, filter?)`, `createTask()`, `updateTask()`, `deleteTask()` |
 | Shift leader logs   | `/api/shift-logs/*` routes                       |
 | Chat channels       | `getChannels(locationId)`                        |
 | Chat messages       | `getMessages(channelId)`                         |
@@ -410,7 +447,14 @@ There is no longer any permanent mock data — `mockSales`, `mockAlerts`, and `m
 - ✓ Chat: full message actions (pin, edit, soft-delete), channel CRUD, member management
 - ✓ AI scheduling: fixed role names, employee UUID handling, locationId, Promise.allSettled apply
 - ✓ Schedule: Gantt chart with horizontal time bars, filter by role/employee, AI suggestion panel
-- Future: Wire tasks table to `/logs` page (currently uses getShiftLogs which queries shift_logs, not tasks)
-- Future: Build shift leader logs UI (restricted to user_lead+)
-- Future: Role management UI so admins can assign roles without SQL
-- Future: RLS tests, multi-location isolation verification
+- ✓ Tasks table wired to `/logs` page (`getTasks()`), separate from `shift_logs`
+- ✓ Shift leader logs UI at `/shift-logs` (checklist templates + narrative logs)
+- ✓ Role management: inline role editing on `/employees/[id]` (admin/super_admin)
+- ✓ Attendance: punch kiosk (`/punch`) + admin report (`/attendance`)
+- ✓ Custom form builder (`/forms/*`) — code complete, but migration `019_custom_forms.sql` not yet applied to the DB
+- ✓ Social feed (`/feed`, `/feed/reports`)
+- Future: Build real `/sales` and `/inventory` page UIs — both are "Coming soon" stubs despite complete backends (`getSales()`, `getInventory()`, full API routes). Was deliberately stubbed in commit `37e6120`; needs a decision on whether to rebuild or keep deferring to `/reports`.
+- Future: Move Settings (`/api/settings`) and Notifications (`/api/notifications`) off the in-memory `lib/server/runtime-store.ts` onto real Supabase tables — currently lost on every restart/redeploy.
+- Future: Apply pending migrations `019_custom_forms.sql` and `020_weather_cache.sql` to the Supabase project.
+- Future: RLS tests, multi-location isolation verification — no test coverage exists yet (`tests/` only covers chat, shift-logs, and AI scheduling).
+- Future: Fix `npm run lint` — 56 errors / 20 warnings, mostly `@typescript-eslint/no-explicit-any` in `lib/gdpr.ts`, `lib/labour-law.ts`, and several `lib/supabase/*.ts` modules.

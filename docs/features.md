@@ -1,6 +1,6 @@
 # Feature Inventory
 
-## Status key: ✅ Complete | ⚠️ Needs migration | 🔲 Planned
+## Status key: ✅ Complete | ⚠️ Partial (see notes) | 🔲 Planned
 
 ---
 
@@ -46,11 +46,14 @@
 - Checklist templates (morning/evening) — `/shift-logs`
 - Task board — `/logs`
 
-### ✅ Operations
-- Inventory with low/critical alerts — `/inventory`
-- Daily sales — `/sales`
-- Dashboard alerts feed
-- Employee activity feed
+### ⚠️ Operations
+- Inventory data layer + API complete (`lib/supabase/inventory.ts`, `GET /api/inventory`, `/api/inventory/low`, `POST /api/inventory/update` incl. low-stock → chat alert trigger) — but `/inventory` page is a "Coming soon" stub. A working UI existed at commit `8912853` and was deliberately reverted to a stub in `37e6120`; needs a decision on whether to rebuild it.
+- Sales data layer + API complete (`lib/supabase/sales.ts`, `GET /api/sales`) and already consumed by `/reports` — but `/sales` page is likewise a "Coming soon" stub for the same reason above.
+- Dashboard alerts feed — ✅ complete
+- Employee activity feed — ✅ complete
+
+### ⚠️ Settings & Notifications
+- `GET/PUT /api/settings`, `GET/POST/PATCH/DELETE /api/notifications` are implemented but persist to an in-memory `globalThis` store (`lib/server/runtime-store.ts`), not a Supabase table. Data does not survive a server restart/redeploy and isn't shared across serverless instances. No migration exists for either. Needs a `settings`/`notifications` table + migration before this is production-durable.
 
 ### ✅ Multi-Location
 - Branch switcher in sidebar (super_admin)
