@@ -9,26 +9,56 @@ const API_KEY = process.env.OPENWEATHER_API_KEY;
 // Weather API Integration
 // ─────────────────────────────────────────────────
 
-type OpenWeatherForecastEntry = {
+type OneCallDailyEntry = {
   dt: number;
-  dt_txt: string;
-  main: {
-    temp: number;
-    temp_min: number;
-    temp_max: number;
+  temp: {
+    min: number;
+    max: number;
   };
   weather: Array<{
     main: string;
   }>;
-  wind: {
-    speed: number;
-  };
+  wind_speed: number;
   pop: number;
+  uvi: number;
 };
 
-type OpenWeatherResponse = {
-  list: OpenWeatherForecastEntry[];
+type OneCallDailyResponse = {
+  data: OneCallDailyEntry[];
 };
+
+type OneCallCurrentEntry = {
+  dt: number;
+  temp: number;
+  weather: Array<{
+    main: string;
+  }>;
+  wind_speed: number;
+  uvi: number;
+};
+
+type OneCallCurrentResponse = {
+  data: OneCallCurrentEntry[];
+};
+
+function oneCallUrl(path: string): URL {
+  const url = new URL(`https://api.openweathermap.org/data/4.0/onecall/${path}`);
+  url.searchParams.append("lat", GOTHENBURG_LAT.toString());
+  url.searchParams.append("lon", GOTHENBURG_LON.toString());
+  url.searchParams.append("appid", API_KEY ?? "");
+  url.searchParams.append("units", "metric");
+  return url;
+}
+
+async function fetchOneCall<T>(path: string): Promise<T> {
+  const response = await fetch(oneCallUrl(path).toString());
+  if (!response.ok) {
+    throw new Error(
+      `OpenWeather API error (${path}): ${response.status} ${response.statusText}`,
+    );
+  }
+  return (await response.json()) as T;
+}
 
 export async function fetchWeatherFromAPI(): Promise<
   Omit<WeatherForecast, "id" | "locationId" | "fetchedAt">[]
@@ -37,94 +67,37 @@ export async function fetchWeatherFromAPI(): Promise<
     throw new Error("OPENWEATHER_API_KEY is not set");
   }
 
-  const url = new URL("https://api.openweathermap.org/data/2.5/forecast");
-  url.searchParams.append("lat", GOTHENBURG_LAT.toString());
-  url.searchParams.append("lon", GOTHENBURG_LON.toString());
-  url.searchParams.append("appid", API_KEY);
-  url.searchParams.append("units", "metric");
-  url.searchParams.append("cnt", "56");
-
-  const response = await fetch(url.toString());
-
-  if (!response.ok) {
-    throw new Error(
-      `OpenWeather API error: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  const data = (await response.json()) as OpenWeatherResponse;
-
-  // Group 3-hourly entries by date
-  const byDate = new Map<
-    string,
-    {
-      temps: number[];
-      conditions: string[];
-      rainProbs: number[];
-      windSpeeds: number[];
-    }
-  >();
-
-  data.list.forEach((entry) => {
-    const date = entry.dt_txt.split(" ")[0]; // YYYY-MM-DD
-    const existing = byDate.get(date) || {
-      temps: [],
-      conditions: [],
-      rainProbs: [],
-      windSpeeds: [],
-    };
-
-    existing.temps.push(entry.main.temp);
-    existing.conditions.push(entry.weather[0].main);
-    existing.rainProbs.push(entry.pop);
-    existing.windSpeeds.push(entry.wind.speed);
-
-    byDate.set(date, existing);
-  });
-
-  // Calculate daily forecasts
-  const forecasts: Omit<WeatherForecast, "id" | "locationId" | "fetchedAt">[] =
-    [];
+  const [daily, current] = await Promise.all([
+    fetchOneCall<OneCallDailyResponse>("timeline/1day"),
+    fetchOneCall<OneCallCurrentResponse>("current"),
+  ]);
 
   // Only get first 7 days
-  const dates = Array.from(byDate.keys()).slice(0, 7);
+  const forecasts: Omit<WeatherForecast, "id" | "locationId" | "fetchedAt">[] =
+    daily.data.slice(0, 7).map((entry, index) => {
+      const date = new Date(entry.dt * 1000);
+      const dateStr = date.toISOString().split("T")[0];
 
-  dates.forEach((dateStr) => {
-    const entry = byDate.get(dateStr);
-    if (!entry) return;
+      // For today, prefer the live "current" snapshot for condition/wind/UV —
+      // the daily timeline forecast for today can lag actual conditions.
+      const live = index === 0 ? current.data[0] : undefined;
 
-    // Find most frequent condition
-    const conditionCounts = new Map<string, number>();
-    entry.conditions.forEach((c) => {
-      conditionCounts.set(c, (conditionCounts.get(c) || 0) + 1);
+      const forecast: Omit<WeatherForecast, "id" | "locationId" | "fetchedAt"> =
+        {
+          forecastDate: dateStr,
+          day: date.toLocaleDateString("en-SE", { weekday: "long" }),
+          temperatureHigh: Math.round(entry.temp.max),
+          temperatureLow: Math.round(entry.temp.min),
+          condition: (live?.weather[0].main ?? entry.weather[0].main) as WeatherCondition,
+          rainProbability: Math.round(entry.pop * 100),
+          windSpeed: Math.round((live?.wind_speed ?? entry.wind_speed) * 10) / 10,
+          uvIndex: Math.round((live?.uvi ?? entry.uvi) * 10) / 10,
+          staffingSuggestion: "",
+          inventorySuggestion: "",
+        };
+
+      return forecast;
     });
-    let mostFrequent = "Clouds";
-    let maxCount = 0;
-    conditionCounts.forEach((count, condition) => {
-      if (count > maxCount) {
-        maxCount = count;
-        mostFrequent = condition;
-      }
-    });
-
-    const forecast: Omit<WeatherForecast, "id" | "locationId" | "fetchedAt"> =
-      {
-        forecastDate: dateStr,
-        day: new Date(dateStr).toLocaleDateString("en-SE", {
-          weekday: "long",
-        }),
-        temperatureHigh: Math.max(...entry.temps),
-        temperatureLow: Math.min(...entry.temps),
-        condition: mostFrequent as WeatherCondition,
-        rainProbability: Math.round(Math.max(...entry.rainProbs) * 100),
-        windSpeed: Math.round((entry.windSpeeds.reduce((a, b) => a + b) / entry.windSpeeds.length) * 10) / 10,
-        uvIndex: 0,
-        staffingSuggestion: "",
-        inventorySuggestion: "",
-      };
-
-    forecasts.push(forecast);
-  });
 
   // Add suggestions
   return generateWeatherSuggestions(forecasts);
