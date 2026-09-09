@@ -236,9 +236,10 @@ Use this weather data to adjust staffing recommendations. On sunny weekends add 
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 2200,
-        temperature: 0.2,
+        model: "claude-sonnet-5",
+        max_tokens: 4096,
+        thinking: { type: "adaptive" },
+        output_config: { effort: "low" },
         system: SYSTEM_PROMPT,
         messages: [
           {

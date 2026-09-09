@@ -212,7 +212,7 @@ All API routes follow the pattern `/app/api/{feature}/{action}/route.ts`:
   - POST /api/generate-schedule-openai (OpenAI alternative)
   - Both include weather context injection and return warnings/violations
 
-- **Weather** (`/api/weather/*`): Forecast data. Uses OpenWeather One Call API 4.0 (`/data/4.0/onecall/current` + `/data/4.0/onecall/timeline/1day`), env var `OPENWEATHER_API_KEY` (server-only, no `NEXT_PUBLIC_` prefix).
+- **Weather** (`/api/weather/*`): Forecast data. Uses OpenWeather API 2.5 (`/data/2.5/forecast` + `/data/2.5/weather`), env var `OPENWEATHER_API_KEY` (server-only, no `NEXT_PUBLIC_` prefix).
   - GET /api/weather (cached forecasts, falls back to mock data if uncached/unconfigured)
   - POST /api/weather/refresh (fetch from OpenWeather API)
   - Requires migration `020_weather_cache.sql` — not yet applied (see Supabase Migrations); until it is, every write fails and the route silently falls back to mock data.
