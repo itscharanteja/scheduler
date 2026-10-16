@@ -35,16 +35,17 @@ export async function middleware(req: NextRequest) {
 
   const { pathname } = req.nextUrl;
   const isLoginPage = pathname === "/login";
+  const isSignupPage = pathname === "/signup";
   const isAuthFlow =
     pathname.startsWith("/auth/") || pathname === "/reset-password";
   // Kiosk page is intentionally public — it handles its own location scoping
   const isKiosk = pathname.startsWith("/punch");
 
-  if (!session && !isLoginPage && !isAuthFlow && !isKiosk) {
+  if (!session && !isLoginPage && !isSignupPage && !isAuthFlow && !isKiosk) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  if (session && isLoginPage) {
+  if (session && (isLoginPage || isSignupPage)) {
     return NextResponse.redirect(new URL("/", req.url));
   }
 

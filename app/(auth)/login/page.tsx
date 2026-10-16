@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { supabaseClient } from "@/lib/supabase";
@@ -119,7 +120,10 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          Contact your administrator to get an account.
+          Have an invited email?{" "}
+          <Link href="/signup" className="font-medium text-slate-900 underline-offset-2 hover:underline">
+            Sign up
+          </Link>
         </p>
       </div>
     </div>
