@@ -11,7 +11,8 @@ import {
   setISOWeekYear,
   startOfWeek,
 } from "date-fns";
-import { AlertTriangle, ChevronLeft, ChevronRight, Plus, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, Bot, ChevronLeft, ChevronRight, Plus, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -742,6 +743,15 @@ function SchedulePageContent() {
               onToggleRole={toggleRoleFilter}
               onClear={clearFilters}
             />
+            {canEdit && (
+              <Link
+                href={`/ai-agent?week=${toWeekParam(weekStart)}`}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+              >
+                <Bot className="h-3.5 w-3.5 text-blue-600" />
+                {lang === "sv" ? "AI-optimera" : "AI Optimize"}
+              </Link>
+            )}
             {canEdit && (
               <ShiftPopover
                 trigger={

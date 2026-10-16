@@ -42,7 +42,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const inventory = await getInventory(locationId);
-    const currentItem = inventory.find((item: InventoryItem) => item.id === id);
+    const currentItem = inventory.find((item) => item.id === id);
 
     if (!currentItem) {
       return NextResponse.json({ error: "Inventory item not found" }, { status: 404 });

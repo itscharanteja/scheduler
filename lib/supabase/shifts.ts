@@ -1,4 +1,4 @@
-import { addDays, endOfMonth, startOfMonth, startOfWeek } from "date-fns";
+import { addDays, endOfMonth, format, startOfMonth, startOfWeek } from "date-fns";
 import type { Shift, WeekSchedule } from "@/lib/types";
 import { getRuntimeStore } from "@/lib/server/runtime-store";
 import { supabaseClient, requireClient, normalizeSupabaseError } from "./client";
@@ -52,32 +52,34 @@ export async function getShiftsByWeek(
 ): Promise<WeekSchedule> {
   try {
     const start = startOfWeek(
-      typeof weekStart === "string" ? new Date(weekStart) : weekStart,
+      typeof weekStart === "string" ? new Date(`${weekStart.slice(0, 10)}T00:00:00`) : weekStart,
       { weekStartsOn: 1 }
     );
+    const startDateStr = format(start, "yyyy-MM-dd");
+    const end = addDays(start, 6);
+    const endDateStr = format(end, "yyyy-MM-dd");
+
     if (!supabaseClient) {
       const store = getRuntimeStore();
-      const startDate = start.toISOString().slice(0, 10);
-      const endDate = addDays(start, 6).toISOString().slice(0, 10);
       const shifts = store.shifts
-        .filter((s) => s.date >= startDate && s.date <= endDate)
+        .filter((s) => s.date >= startDateStr && s.date <= endDateStr)
         .filter((s) => !locationId || s.locationId === locationId)
         .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
-      return { weekStart: startDate, locationId: locationId ?? "", shifts, status: "draft" };
+      return { weekStart: startDateStr, locationId: locationId ?? "", shifts, status: "draft" };
     }
-    const end = addDays(start, 6);
+
     let query = supabaseClient
       .from("shifts")
       .select("id, employee_id, date, start_time, end_time, role, location_id, status, created_by_ai, notes, created_at, employees(name)")
-      .gte("date", start.toISOString().slice(0, 10))
-      .lte("date", end.toISOString().slice(0, 10));
+      .gte("date", startDateStr)
+      .lte("date", endDateStr);
     if (locationId) query = query.eq("location_id", locationId);
     const { data, error } = await query.order("date", { ascending: true });
     if (error) throw error;
     const mappedShifts: Shift[] = ((data ?? []) as unknown as DbShiftRowWithEmployee[]).map((row) =>
       mapShift({ ...row, employee_name: getEmployeeNameFromRelation(row.employees) })
     );
-    return { weekStart: start.toISOString().slice(0, 10), locationId: locationId ?? "", shifts: mappedShifts, status: "draft" };
+    return { weekStart: startDateStr, locationId: locationId ?? "", shifts: mappedShifts, status: "draft" };
   } catch (error) {
     throw normalizeSupabaseError(error, "getShiftsByWeek");
   }

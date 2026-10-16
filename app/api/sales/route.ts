@@ -15,6 +15,37 @@ export async function GET(req: NextRequest) {
 
   try {
     const sales = await getSales(locationId, limit);
+    const { getSimulator } = await import("@/lib/simulator/engine");
+    const sim = getSimulator();
+    const simMetrics = sim.getStatus().metrics;
+    const todayStr = sim.currentTime.toISOString().split("T")[0];
+
+    // If today is in the list, overlay live simulator stats
+    const todayIndex = sales.findIndex((s) => s.date === todayStr);
+    if (todayIndex >= 0) {
+      sales[todayIndex] = {
+        ...sales[todayIndex],
+        revenue: simMetrics.todayRevenue,
+        orders: simMetrics.todayOrders,
+        averageOrderValue: simMetrics.averageOrderValue,
+        laborCost: simMetrics.laborCost,
+        peakLabel: simMetrics.peakLabel,
+        hourlyRevenue: simMetrics.hourlyRevenue,
+      };
+    } else if (sales.length < limit) {
+      sales.unshift({
+        id: "sim-today",
+        date: todayStr,
+        revenue: simMetrics.todayRevenue,
+        orders: simMetrics.todayOrders,
+        averageOrderValue: simMetrics.averageOrderValue,
+        laborCost: simMetrics.laborCost,
+        comparisonRevenue: sim.comparisonRevenue,
+        peakLabel: simMetrics.peakLabel,
+        hourlyRevenue: simMetrics.hourlyRevenue,
+      });
+    }
+
     return NextResponse.json({ success: true, sales });
   } catch (error) {
     console.error("[api:sales]", error);

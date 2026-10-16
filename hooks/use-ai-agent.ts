@@ -23,9 +23,15 @@ export type GenerationResult = {
 };
 
 function shiftHours(startTime: string, endTime: string): number {
-  const [sh, sm] = startTime.split(":").map(Number);
-  const [eh, em] = endTime.split(":").map(Number);
-  return (eh * 60 + em - sh * 60 - sm) / 60;
+  if (!startTime || !endTime) return 0;
+  const [sh = 0, sm = 0] = startTime.split(":").map(Number);
+  const [eh = 0, em = 0] = endTime.split(":").map(Number);
+  let startMins = sh * 60 + sm;
+  let endMins = eh * 60 + em;
+  if (endMins < startMins) {
+    endMins += 24 * 60; // overnight shift
+  }
+  return (endMins - startMins) / 60;
 }
 
 type UseAIAgentOptions = {
@@ -79,34 +85,56 @@ export function useAIAgent({
   }, [autoLoad, reloadData]);
 
   const hourImpact = useMemo(() => {
-    const currentByEmployee = new Map<string, number>();
+    const currentByEmpId = new Map<string, number>();
+    const currentByName = new Map<string, number>();
+    const shiftCountByEmpId = new Map<string, number>();
+
     for (const shift of existingShifts) {
-      currentByEmployee.set(
-        shift.employeeId,
-        (currentByEmployee.get(shift.employeeId) ?? 0) +
-          shiftHours(shift.startTime, shift.endTime)
-      );
+      const hours = shiftHours(shift.startTime, shift.endTime);
+      if (shift.employeeId) {
+        currentByEmpId.set(shift.employeeId, (currentByEmpId.get(shift.employeeId) ?? 0) + hours);
+        shiftCountByEmpId.set(shift.employeeId, (shiftCountByEmpId.get(shift.employeeId) ?? 0) + 1);
+      }
+      if (shift.employeeName) {
+        const norm = shift.employeeName.trim().toLowerCase();
+        currentByName.set(norm, (currentByName.get(norm) ?? 0) + hours);
+      }
     }
 
-    const generatedByEmployee = new Map<string, number>();
+    const generatedByEmpId = new Map<string, number>();
+    const generatedByName = new Map<string, number>();
+    const genCountByEmpId = new Map<string, number>();
+
     for (const shift of result?.shifts ?? []) {
-      generatedByEmployee.set(
-        shift.employeeId,
-        (generatedByEmployee.get(shift.employeeId) ?? 0) +
-          shiftHours(shift.startTime, shift.endTime)
-      );
+      const hours = shiftHours(shift.startTime, shift.endTime);
+      if (shift.employeeId) {
+        generatedByEmpId.set(shift.employeeId, (generatedByEmpId.get(shift.employeeId) ?? 0) + hours);
+        genCountByEmpId.set(shift.employeeId, (genCountByEmpId.get(shift.employeeId) ?? 0) + 1);
+      }
+      if (shift.employeeName) {
+        const norm = shift.employeeName.trim().toLowerCase();
+        generatedByName.set(norm, (generatedByName.get(norm) ?? 0) + hours);
+      }
     }
 
     return employees.map((employee) => {
-      const current = currentByEmployee.get(employee.id) ?? 0;
-      const generated = generatedByEmployee.get(employee.id) ?? 0;
+      const normName = employee.name.trim().toLowerCase();
+      const current = currentByEmpId.get(employee.id) ?? currentByName.get(normName) ?? 0;
+      const generated = generatedByEmpId.get(employee.id) ?? generatedByName.get(normName) ?? 0;
+      const shiftCount = shiftCountByEmpId.get(employee.id) ?? 0;
+      const genShiftCount = genCountByEmpId.get(employee.id) ?? 0;
       const projected = current + generated;
+
       return {
         id: employee.id,
         name: employee.name,
+        role: employee.role,
         current,
         generated,
         projected,
+        shiftCount,
+        genShiftCount,
+        contractHours: employee.contractHours,
         max: employee.maxWeeklyHours,
         exceeds: projected > employee.maxWeeklyHours,
       };
@@ -123,7 +151,7 @@ export function useAIAgent({
       try {
         const employeePayload = employees.map((employee) => {
           const currentScheduledHours = existingShifts
-            .filter((shift) => shift.employeeId === employee.id)
+            .filter((shift) => shift.employeeId === employee.id || (shift.employeeName && shift.employeeName.trim().toLowerCase() === employee.name.trim().toLowerCase()))
             .reduce((sum, shift) => sum + shiftHours(shift.startTime, shift.endTime), 0);
           return {
             id: employee.id,
@@ -160,13 +188,19 @@ export function useAIAgent({
           throw new Error(typeof payload?.error === "string" ? payload.error : "Failed to generate schedule.");
         }
         const normalizedShifts: GeneratedShift[] = Array.isArray(payload?.shifts)
-          ? payload.shifts.map((shift: GeneratedShift) => ({
+          ? payload.shifts.map((shift: GeneratedShift) => {
+            const matchedEmp = employees.find(
+              (e) =>
+                e.id === shift.employeeId ||
+                e.name.trim().toLowerCase() === shift.employeeName?.trim().toLowerCase() ||
+                e.name.trim().toLowerCase() === shift.employeeId?.trim().toLowerCase()
+            );
+            return {
               ...shift,
-              employeeName:
-                shift.employeeName ||
-                employees.find((employee) => employee.id === shift.employeeId)?.name ||
-                "",
-            }))
+              employeeId: matchedEmp?.id || shift.employeeId,
+              employeeName: matchedEmp?.name || shift.employeeName || "",
+            };
+          })
           : [];
 
         setResult({

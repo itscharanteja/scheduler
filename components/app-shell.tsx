@@ -67,6 +67,7 @@ function getPageMeta(pathname: string, lang: "en" | "sv") {
           schedule: ["Schema", "Hantera täckning, konflikter och snabbjusteringar i samma vy."],
           messages: ["Meddelanden", "Operativa kanaler, viktiga notiser och snabba svar."],
           sales: ["Försäljning", "Dagens tempo, timtrender och signaler som påverkar bemanning."],
+          inventory: ["Lager & Råvaror", "Realtidsövervakning av råvaronivåer, automatiska tröskelvarningar och påfyllnad."],
           ai: ["AI-optimering", "Granska rekommendationer, förstå varför och godkänn direkt."],
           team: ["Team", "Se vem som jobbar, tillgänglighet, roller och uppmärksamhetspunkter."],
           reports: ["Rapporter", "Jämför nyckeltal, uppföljning och exportera arbetsdata."],
@@ -81,6 +82,7 @@ function getPageMeta(pathname: string, lang: "en" | "sv") {
           schedule: ["Schedule", "Manage coverage, conflicts, and quick adjustments in one place."],
           messages: ["Messages", "Operational channels, pinned notices, and fast replies."],
           sales: ["Sales & Analytics", "Today’s pace, hourly trends, and staffing signals."],
+          inventory: ["Inventory & Stock", "Live stock tracking, automated threshold warnings, and replenishment."],
           ai: ["AI Optimisation", "Review recommendations, understand why, and approve quickly."],
           team: ["Team", "See who is working, available, and needs attention."],
           reports: ["Reports", "Compare key metrics, follow-up outcomes, and export operational data."],
@@ -107,6 +109,9 @@ function getPageMeta(pathname: string, lang: "en" | "sv") {
   }
   if (pathname.startsWith("/sales")) {
     return { title: copy.sales[0], subtitle: copy.sales[1] };
+  }
+  if (pathname.startsWith("/inventory")) {
+    return { title: copy.inventory[0], subtitle: copy.inventory[1] };
   }
   if (pathname.startsWith("/ai-agent")) {
     return { title: copy.ai[0], subtitle: copy.ai[1] };

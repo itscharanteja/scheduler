@@ -97,6 +97,136 @@ export default function DashboardPage() {
     };
   }, [weekStart, locationId]);
 
+  // Connect to live simulation SSE stream for instant Sales Today updates
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource("/api/sim/stream");
+      eventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type === "connected" && payload.data?.metrics) {
+            const m = payload.data.metrics;
+            const simDate = (payload.data.currentTime || todayKey).split("T")[0];
+            setTodaySales((prev) => ({
+              id: prev?.id || "sim-today",
+              date: simDate,
+              revenue: m.todayRevenue,
+              orders: m.todayOrders,
+              averageOrderValue: m.averageOrderValue,
+              laborCost: m.laborCost,
+              comparisonRevenue: prev?.comparisonRevenue || 49200,
+              peakLabel: m.peakLabel,
+              hourlyRevenue: m.hourlyRevenue,
+            }));
+          } else if (payload.type === "order" && payload.data) {
+            setTodaySales((prev) => {
+              const orderData = payload.data;
+              const newRev =
+                typeof orderData.todayRevenue === "number"
+                  ? orderData.todayRevenue
+                  : Math.round(((prev?.revenue || 0) + (orderData.amount || 0)) * 100) / 100;
+              const newOrders =
+                typeof orderData.todayOrders === "number"
+                  ? orderData.todayOrders
+                  : (prev?.orders || 0) + 1;
+              const peakLabel = orderData.peakLabel || prev?.peakLabel || "12:00–13:00";
+              const hourlyRevenue = orderData.hourlyRevenue || prev?.hourlyRevenue || [];
+
+              return {
+                id: prev?.id || "sim-today",
+                date: prev?.date || todayKey,
+                revenue: newRev,
+                orders: newOrders,
+                averageOrderValue: newOrders > 0 ? Math.round((newRev / newOrders) * 10) / 10 : 0,
+                laborCost: Math.round(newRev * 0.245 * 100) / 100,
+                comparisonRevenue: prev?.comparisonRevenue || 49200,
+                peakLabel,
+                hourlyRevenue,
+              };
+            });
+          } else if (payload.type === "clock" && payload.data?.metrics) {
+            const m = payload.data.metrics;
+            const simDate = (payload.data.currentTime || todayKey).split("T")[0];
+            setTodaySales((prev) => ({
+              id: prev?.id || "sim-today",
+              date: simDate,
+              revenue: m.todayRevenue,
+              orders: m.todayOrders,
+              averageOrderValue: m.averageOrderValue,
+              laborCost: m.laborCost,
+              comparisonRevenue: prev?.comparisonRevenue || 49200,
+              peakLabel: m.peakLabel,
+              hourlyRevenue: m.hourlyRevenue,
+            }));
+          } else if (payload.type === "simulation" && payload.data?.action === "reset") {
+            if (payload.data.metrics) {
+              const m = payload.data.metrics;
+              setTodaySales({
+                id: "sim-today",
+                date: todayKey,
+                revenue: m.todayRevenue,
+                orders: m.todayOrders,
+                averageOrderValue: m.averageOrderValue,
+                laborCost: m.laborCost,
+                comparisonRevenue: 49200,
+                peakLabel: m.peakLabel,
+                hourlyRevenue: m.hourlyRevenue,
+              });
+            } else {
+              getSales(locationId, 1).then((s) => setTodaySales(s[0] ?? null)).catch(() => {});
+            }
+          } else if (payload.type === "alert" && payload.data) {
+            setAlerts((prev) => [
+              {
+                id: payload.data.id || crypto.randomUUID(),
+                tone: payload.data.tone || "warning",
+                title: payload.data.title || "",
+                message: payload.data.message || "",
+              },
+              ...prev.slice(0, 5),
+            ]);
+          } else if (payload.type === "activity" && payload.data) {
+            setActivity((prev) => [
+              {
+                id: payload.data.id || crypto.randomUUID(),
+                employeeId: payload.data.employeeId || "",
+                type: (payload.data.type as any) || "shift",
+                title: payload.data.title || "",
+                detail: payload.data.detail || "",
+                timestamp: payload.data.timestamp || new Date().toISOString(),
+              },
+              ...prev.slice(0, 5),
+            ]);
+          }
+        } catch {}
+      };
+    } catch {}
+
+    return () => {
+      eventSource?.close();
+    };
+  }, [todayKey, locationId]);
+
+  // Periodic background fallback to keep Sales Today perfectly synced
+  useEffect(() => {
+    const syncSales = async () => {
+      try {
+        const sales = await getSales(locationId, 1);
+        if (sales[0]) {
+          setTodaySales(sales[0]);
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(syncSales, 8000);
+    window.addEventListener("focus", syncSales);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", syncSales);
+    };
+  }, [locationId]);
+
   const todayShifts = useMemo(
     () => weekShifts.filter((shift) => shift.date === todayKey),
     [todayKey, weekShifts],

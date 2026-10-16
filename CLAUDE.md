@@ -172,12 +172,24 @@ All API routes follow the pattern `/app/api/{feature}/{action}/route.ts`:
   - POST /api/shift-logs/create
   - PATCH /api/shift-logs/update
 
-- **Inventory** (`/api/inventory/*`): Stock management with auto-alerts. API is complete, but the `/inventory` page UI is still a stub — see Notes for Future Work.
+- **Inventory** (`/api/inventory/*`): Stock management with auto-alerts.
   - GET /api/inventory (all items), /api/inventory/low (alert items)
   - POST /api/inventory/update (triggers alert to managers chat if stock drops below critical)
+  - Interactive UI at `/inventory` with live stock depletion gauges and restock controls
 
-- **Sales** (`/api/sales`): Daily sales data. API is complete (also consumed by `/reports`), but the `/sales` page UI is still a stub — see Notes for Future Work.
+- **Sales** (`/api/sales`): Daily sales data.
   - GET /api/sales?locationId=&limit=
+  - Interactive UI at `/sales` with live simulator controls, 24-hour hourly distribution chart, live streaming order ticker, and top menu items breakdown
+
+- **Sales Simulation Engine** (`/api/sim/*`): Real-time Poisson order generator, recipe depletion, scenario triggers, and clock management
+  - GET /api/sim/status — current clock, speed, active scenarios, today's metrics
+  - POST /api/sim/start — start/resume clock
+  - POST /api/sim/pause — pause clock
+  - POST /api/sim/reset — reset to opening state (08:00 UTC)
+  - POST /api/sim/speed — set multiplier (1x, 2x, 5x, 10x, 20x)
+  - POST /api/sim/scenario — inject scenario (`rush_hour`, `weather_spike`, `stockout`, `call_out`)
+  - POST /api/sim/tick — advance simulation clock by N minutes
+  - GET /api/sim/stream — Server-Sent Events (SSE) live event stream (orders, alerts, clock updates, inventory status)
 
 - **Attendance** (`/api/punch/*`, `/api/attendance/*`): Employee punch in/out
   - GET/POST /api/punch — kiosk clock in/out (public, no auth)
@@ -453,7 +465,7 @@ There is no longer any permanent mock data — `mockSales`, `mockAlerts`, and `m
 - ✓ Attendance: punch kiosk (`/punch`) + admin report (`/attendance`)
 - ✓ Custom form builder (`/forms/*`) — code complete, but migration `019_custom_forms.sql` not yet applied to the DB
 - ✓ Social feed (`/feed`, `/feed/reports`)
-- Future: Build real `/sales` and `/inventory` page UIs — both are "Coming soon" stubs despite complete backends (`getSales()`, `getInventory()`, full API routes). Was deliberately stubbed in commit `37e6120`; needs a decision on whether to rebuild or keep deferring to `/reports`.
+- ✓ Built real `/sales` and `/inventory` pages integrated with the native live sales simulator engine (`/api/sim/*`), SSE order streaming, recipe stock depletion, and scenario injectors.
 - Future: Move Settings (`/api/settings`) and Notifications (`/api/notifications`) off the in-memory `lib/server/runtime-store.ts` onto real Supabase tables — currently lost on every restart/redeploy.
 - Future: Apply pending migrations `019_custom_forms.sql` and `020_weather_cache.sql` to the Supabase project.
 - Future: RLS tests, multi-location isolation verification — no test coverage exists yet (`tests/` only covers chat, shift-logs, and AI scheduling).

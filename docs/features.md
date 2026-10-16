@@ -46,9 +46,10 @@
 - Checklist templates (morning/evening) — `/shift-logs`
 - Task board — `/logs`
 
-### ⚠️ Operations
-- Inventory data layer + API complete (`lib/supabase/inventory.ts`, `GET /api/inventory`, `/api/inventory/low`, `POST /api/inventory/update` incl. low-stock → chat alert trigger) — but `/inventory` page is a "Coming soon" stub. A working UI existed at commit `8912853` and was deliberately reverted to a stub in `37e6120`; needs a decision on whether to rebuild it.
-- Sales data layer + API complete (`lib/supabase/sales.ts`, `GET /api/sales`) and already consumed by `/reports` — but `/sales` page is likewise a "Coming soon" stub for the same reason above.
+### ✅ Operations & Simulation
+- Sales Dashboard & Simulator — `/sales` (live Poisson order engine, 24-hour distribution, scenario triggers, SSE ticker)
+- Inventory Management & Depletion — `/inventory` (live recipe stock deduction, threshold warnings, quick restock modal)
+- Simulation API — `/api/sim/*` (`status`, `start`, `pause`, `reset`, `speed`, `scenario`, `tick`, `stream`)
 - Dashboard alerts feed — ✅ complete
 - Employee activity feed — ✅ complete
 

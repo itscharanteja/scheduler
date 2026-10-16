@@ -25,12 +25,30 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const items = await getInventory(locationId);
+    let items = await getInventory(locationId);
+
+    // If database has no inventory rows yet, serve from simulator inventory
+    if (!items || items.length === 0) {
+      const { getSimulator } = await import("@/lib/simulator/engine");
+      const sim = getSimulator();
+      items = Array.from(sim.inventory.values()).map((inv) => ({
+        id: inv.id,
+        locationId,
+        itemName: inv.name,
+        currentStock: inv.currentStock,
+        criticalThreshold: inv.criticalThreshold,
+        lowThreshold: inv.lowThreshold,
+        unit: inv.unit,
+        status: inv.status,
+        updatedBy: "simulation",
+        lastUpdated: new Date().toISOString(),
+      }));
+    }
 
     // Count by status
-    const criticalCount = items.filter((i) => i.status === "critical").length;
-    const lowCount = items.filter((i) => i.status === "low").length;
-    const okCount = items.filter((i) => i.status === "ok").length;
+    const criticalCount = items.filter((i: any) => i.status === "critical").length;
+    const lowCount = items.filter((i: any) => i.status === "low").length;
+    const okCount = items.filter((i: any) => i.status === "ok").length;
 
     return NextResponse.json(
       {
