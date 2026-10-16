@@ -201,6 +201,11 @@ export default function DashboardPage() {
           }
         } catch {}
       };
+
+      eventSource.onerror = () => {
+        // Prevent aggressive reconnect loop in serverless production
+        eventSource?.close();
+      };
     } catch {}
 
     return () => {
