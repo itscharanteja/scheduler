@@ -141,9 +141,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   // Step 1: Invite the user — creates Auth row and fires handle_new_user() trigger
+  const redirectTo = `${req.nextUrl.origin}/auth/confirm?next=/reset-password`;
   const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
     email,
-    { data: { full_name: fullName } },
+    {
+      data: { full_name: fullName },
+      redirectTo,
+    },
   );
 
   if (inviteError || !inviteData?.user) {
