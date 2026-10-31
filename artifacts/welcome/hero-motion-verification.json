@@ -1,0 +1,89 @@
+{
+  "checks": [
+    {
+      "name": "Hero entrance finishes and rests",
+      "passed": true
+    },
+    {
+      "name": "Entrance timeline completes within 1.6 seconds",
+      "passed": true
+    },
+    {
+      "name": "Vision label remains present",
+      "passed": true
+    },
+    {
+      "name": "Heading retains accessible reading order",
+      "passed": true
+    },
+    {
+      "name": "Keyboard replay restarts motion without moving focus",
+      "passed": true
+    },
+    {
+      "name": "Primary action is available during the entrance",
+      "passed": true
+    },
+    {
+      "name": "Motion pauses when hero leaves the viewport",
+      "passed": true
+    },
+    {
+      "name": "Offscreen timeline stops advancing",
+      "passed": true
+    },
+    {
+      "name": "Motion resumes when hero returns",
+      "passed": true
+    },
+    {
+      "name": "Desktop has no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "Mobile has no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "Mobile avoids horizontal card travel and light sweep",
+      "passed": true
+    },
+    {
+      "name": "Mobile replay and caption stay below the cards",
+      "passed": true
+    },
+    {
+      "name": "Mobile menu works",
+      "passed": true
+    },
+    {
+      "name": "Menu closes on navigation",
+      "passed": true
+    },
+    {
+      "name": "320px layout has no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "Reduced motion cancels every hero animation",
+      "passed": true
+    },
+    {
+      "name": "Reduced motion shows full text and cards",
+      "passed": true
+    },
+    {
+      "name": "Reduced motion hides replay",
+      "passed": true
+    },
+    {
+      "name": "Heading and actions work without JavaScript",
+      "passed": true
+    },
+    {
+      "name": "No browser runtime errors",
+      "passed": true
+    }
+  ],
+  "errors": []
+}

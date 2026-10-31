@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <title>Skift</title>
+  <path d="M6 7h8v8H6zM18 7h8v8h-8zM6 19h8v8H6z" fill="#283f34"/>
+  <path d="m21.5 17 6 6-6 6-6-6 6-6Z" fill="#283f34" opacity=".62"/>
+</svg>

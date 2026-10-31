@@ -36,12 +36,13 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isLoginPage = pathname === "/login";
   const isSignupPage = pathname === "/signup";
+  const isWelcomePage = pathname === "/welcome";
   const isAuthFlow =
     pathname.startsWith("/auth/") || pathname === "/reset-password";
   // Kiosk page is intentionally public — it handles its own location scoping
   const isKiosk = pathname.startsWith("/punch");
 
-  if (!session && !isLoginPage && !isSignupPage && !isAuthFlow && !isKiosk) {
+  if (!session && !isLoginPage && !isSignupPage && !isWelcomePage && !isAuthFlow && !isKiosk) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
@@ -54,5 +55,5 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   // Run on all routes except Next.js internals and static files
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/|images/).*)"],
 };

@@ -1,0 +1,142 @@
+{
+  "checks": [
+    {
+      "name": "Public workspace landing route",
+      "passed": true
+    },
+    {
+      "name": "Desktop has no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "All twelve feature areas are visible",
+      "passed": true
+    },
+    {
+      "name": "AI vision and available AI distinction is visible",
+      "passed": true
+    },
+    {
+      "name": "AI scenario: Prepare a shift",
+      "passed": true
+    },
+    {
+      "name": "AI scenario: Coordinate the team",
+      "passed": true
+    },
+    {
+      "name": "AI scenario: Review activity",
+      "passed": true
+    },
+    {
+      "name": "AI scenario: Reports & documents",
+      "passed": true
+    },
+    {
+      "name": "Task completion updates overview",
+      "passed": true
+    },
+    {
+      "name": "Social achievement recognition works",
+      "passed": true
+    },
+    {
+      "name": "Keyboard product navigation works",
+      "passed": true
+    },
+    {
+      "name": "Schedule week/day view works",
+      "passed": true
+    },
+    {
+      "name": "Local attendance preview works",
+      "passed": true
+    },
+    {
+      "name": "Local communication preview works",
+      "passed": true
+    },
+    {
+      "name": "FAQ expands",
+      "passed": true
+    },
+    {
+      "name": "Anchors resolve",
+      "passed": true
+    },
+    {
+      "name": "Workspace sign-in links are correct",
+      "passed": true
+    },
+    {
+      "name": "Mobile has no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "Mobile menu opens",
+      "passed": true
+    },
+    {
+      "name": "Mobile menu closes on navigation",
+      "passed": true
+    },
+    {
+      "name": "Small mobile has no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "No browser runtime exceptions",
+      "passed": true
+    },
+    {
+      "name": "Restaurant context reveals",
+      "passed": true
+    },
+    {
+      "name": "Feature groups reveal",
+      "passed": true
+    },
+    {
+      "name": "All four groups and twelve tools remain accessible",
+      "passed": true
+    },
+    {
+      "name": "Feature navigation updates selection",
+      "passed": true
+    },
+    {
+      "name": "AI direct step selection works",
+      "passed": true
+    },
+    {
+      "name": "AI replay returns to goal",
+      "passed": true
+    },
+    {
+      "name": "AI scroll progresses",
+      "passed": true
+    },
+    {
+      "name": "FAQ expanded answer has height",
+      "passed": true
+    },
+    {
+      "name": "FAQ collapses",
+      "passed": true
+    },
+    {
+      "name": "Reduced motion disables tab animation",
+      "passed": true
+    },
+    {
+      "name": "Reduced motion disables sticky story",
+      "passed": true
+    },
+    {
+      "name": "Final mobile layout has no overflow",
+      "passed": true
+    }
+  ],
+  "runtimeErrors": [],
+  "title": "Skift — Your restaurant. One AI workspace."
+}
