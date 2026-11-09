@@ -3,7 +3,7 @@
 import { createContext, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Bot,
   Building2,
@@ -28,7 +28,6 @@ import {
   Settings,
   Users,
 } from "lucide-react";
-import { toast } from "sonner";
 import { LanguageProvider, useLanguage } from "@/context/LanguageContext";
 import { useAuth, type UserRole } from "@/context/AuthContext";
 import { LocationProvider, useLocation } from "@/context/LocationContext";
@@ -48,6 +47,8 @@ type NavItem = {
   /** If set, only users with one of these roles see this item. */
   roles?: UserRole[];
 };
+
+const TIER_1_ROUTES = new Set(["/", "/schedule", "/logs"]);
 
 interface ShellData {
   employees: Employee[];
@@ -140,12 +141,48 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
   const { user, hasRole, signOut, loading: authLoading } = useAuth();
   const { locationId, locations, setLocationId } = useLocation();
   const isSuperAdmin = hasRole("super_admin");
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const pathname = usePathname();
   const currentMeta = useMemo(() => getPageMeta(pathname, lang), [lang, pathname]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [branchOpen, setBranchOpen] = useState(false);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
+  const navigatingWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPathnameRef = useRef(pathname);
+  const lastSearchRef = useRef(searchParams?.toString() ?? "");
+
+  const handleNavClick = (href: string) => {
+    if (pathname === href) return;
+    setNavigatingTo(href);
+    if (navigatingWatchdogRef.current) {
+      clearTimeout(navigatingWatchdogRef.current);
+    }
+    navigatingWatchdogRef.current = setTimeout(() => {
+      setNavigatingTo(null);
+    }, 2000);
+  };
+
+  useEffect(() => {
+    const currentSearch = searchParams?.toString() ?? "";
+    const hasPathChanged = pathname !== lastPathnameRef.current;
+    const hasSearchChanged = currentSearch !== lastSearchRef.current;
+
+    if (hasPathChanged || hasSearchChanged) {
+      lastPathnameRef.current = pathname;
+      lastSearchRef.current = currentSearch;
+      if (navigatingWatchdogRef.current) {
+        clearTimeout(navigatingWatchdogRef.current);
+      }
+      setTimeout(() => {
+        setNavigatingTo(null);
+        setMobileNavOpen(false);
+      }, 0);
+    }
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     if (!authLoading && !user && process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -160,14 +197,15 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
   );
 
   const isMyTasks = !hasRole("admin", "super_admin");
+  const employeeId = user?.employeeId;
   const taskFilter = useMemo(
     () =>
-      isMyTasks && user?.employeeId
-        ? { assigneeId: user.employeeId, createdBy: user.employeeId }
+      isMyTasks && employeeId
+        ? { assigneeId: employeeId, createdBy: employeeId }
         : undefined,
-    [isMyTasks, user?.employeeId]
+    [isMyTasks, employeeId]
   );
-  const taskKey = isMyTasks && user?.employeeId ? `tasks:my:${user.employeeId}` : "tasks:all";
+  const taskKey = isMyTasks && employeeId ? `tasks:my:${employeeId}` : "tasks:all";
 
   const { data: logs = [] } = useCachedQuery<any[]>(
     taskKey,
@@ -249,10 +287,6 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
     return [...routeMatches, ...employeeMatches, ...taskMatches].slice(0, 8);
   }, [deferredSearch, employees, logs, navItems]);
 
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [pathname]);
-
   return (
     <ShellDataContext.Provider value={{ employees, unreadChatCount }}>
     <div className="app-shell">
@@ -260,7 +294,12 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
         <aside className="app-sidebar">
           <div className="px-3">
             <div className="flex items-center justify-between gap-3">
-              <Link href="/" className="inline-flex items-center gap-2 text-2xl font-semibold tracking-[-0.04em] text-[#30251F]">
+              <Link
+                href="/"
+                prefetch={true}
+                onClick={() => handleNavClick("/")}
+                className="inline-flex items-center gap-2 text-2xl font-semibold tracking-[-0.04em] text-[#30251F] active:scale-[0.98] transition-transform duration-75"
+              >
                 <svg viewBox="0 0 32 32" fill="none" aria-hidden="true" className="h-6 w-6 text-[#C65B3B]">
                   <path d="M6 7h8v8H6zM18 7h8v8h-8zM6 19h8v8H6z" fill="currentColor" />
                   <path d="m21.5 17 6 6-6 6-6-6 6-6Z" fill="#F6BB86" />
@@ -318,14 +357,29 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
             <div className="space-y-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`));
+                const isPending = navigatingTo === item.href;
+                const isTier1 = TIER_1_ROUTES.has(item.href);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`app-nav-item ${isActive ? "app-nav-item-active" : ""}`}
+                    prefetch={isTier1 ? true : false}
+                    onPointerEnter={!isTier1 ? () => router.prefetch(item.href) : undefined}
+                    onClick={() => handleNavClick(item.href)}
+                    className={`app-nav-item active:scale-[0.98] transition-transform duration-75 ${
+                      isActive ? "app-nav-item-active" : ""
+                    } ${isPending ? "scale-[0.98] bg-[#FDF1E6] border-[#F2D2BD]" : ""}`}
                   >
-                    <Icon className="h-4 w-4" />
+                    <div className="relative shrink-0 flex items-center justify-center">
+                      <Icon className="h-4 w-4" />
+                      {isPending && (
+                        <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#C65B3B] opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#C65B3B]" />
+                        </span>
+                      )}
+                    </div>
                     <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.label}</span>
                     {item.badge ? (
                       <span className="status-chip status-info">{item.badge}</span>
@@ -463,12 +517,18 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
                 <div className="space-y-1">
                   {navItems.map((item) => {
                     const Icon = item.icon;
-                    const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`));
+                    const isTier1 = TIER_1_ROUTES.has(item.href);
                     return (
                       <Link
                         key={item.href}
                         href={item.href}
-                        className={`app-nav-item ${isActive ? "app-nav-item-active" : ""}`}
+                        prefetch={isTier1 ? true : false}
+                        onClick={() => {
+                          setMobileNavOpen(false);
+                          handleNavClick(item.href);
+                        }}
+                        className={`app-nav-item active:scale-[0.98] transition-transform duration-75 ${isActive ? "app-nav-item-active" : ""}`}
                       >
                         <Icon className="h-4 w-4" />
                         <span className="flex-1 text-sm font-medium">{item.label}</span>
@@ -506,12 +566,15 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
       <nav className="app-mobile-nav">
         {primaryMobileNav.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`));
+          const isTier1 = TIER_1_ROUTES.has(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`app-mobile-nav-item ${isActive ? "app-mobile-nav-item-active" : ""}`}
+              prefetch={isTier1 ? true : false}
+              onClick={() => handleNavClick(item.href)}
+              className={`app-mobile-nav-item active:scale-[0.98] transition-transform duration-75 ${isActive ? "app-mobile-nav-item-active" : ""}`}
             >
               <Icon className="h-4 w-4" />
               <span>{item.label}</span>

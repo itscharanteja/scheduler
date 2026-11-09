@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { DM_Mono, DM_Sans } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "sonner";
+import { NavigationProgressBar } from "@/components/navigation-progress-bar";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -37,6 +39,9 @@ export default function RootLayout({
       <body
         className={`${dmSans.variable} ${dmMono.variable} antialiased bg-background text-foreground transition-colors duration-300`}
       >
+        <Suspense fallback={null}>
+          <NavigationProgressBar />
+        </Suspense>
         <AuthProvider>{children}</AuthProvider>
         <Toaster
           position="top-right"

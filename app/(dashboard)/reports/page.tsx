@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { GlassSkeleton } from "@/components/ui/glass-skeleton";
+import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import { useLocation } from "@/context/LocationContext";
 import { getSales, getShiftLogs, getShiftsByWeek } from "@/lib/supabase";
 import { startOfWeek } from "date-fns";
@@ -73,10 +73,17 @@ export default function ReportsPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <GlassSkeleton className="h-32" />
-        <div className="grid gap-4 xl:grid-cols-2">
-          <GlassSkeleton className="h-64" />
-          <GlassSkeleton className="h-64" />
+        <DashboardSkeleton type="grid" />
+        <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+          <DashboardSkeleton type="table" />
+          <div className="rounded-2xl border border-[#E8D9CB] bg-[#FFFDFB] p-5 shadow-sm space-y-4">
+            <div className="h-6 w-48 rounded bg-[#DFCBB8] animate-pulse" />
+            <div className="space-y-3">
+              <div className="h-14 rounded-xl bg-[#FAF2E9] animate-pulse" />
+              <div className="h-14 rounded-xl bg-[#FAF2E9] animate-pulse" />
+              <div className="h-14 rounded-xl bg-[#FAF2E9] animate-pulse" />
+            </div>
+          </div>
         </div>
       </div>
     );

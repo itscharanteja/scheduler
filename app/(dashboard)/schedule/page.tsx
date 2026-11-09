@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   addDays,
@@ -15,14 +16,14 @@ import Link from "next/link";
 import { AlertTriangle, Bot, ChevronLeft, ChevronRight, Plus, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DashboardSkeleton } from "@/components/dashboard-skeleton";
+import { ShiftPopover, type ShiftForm } from "./shift-popover";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useLocation } from "@/context/LocationContext";
 import { useShellData } from "@/components/app-shell";
-import { useDatabaseStatus } from "@/context/DatabaseStatusContext";
 import { useCachedQuery } from "@/lib/cache/swr-cache";
 import {
   createShift,
@@ -32,6 +33,11 @@ import {
 } from "@/lib/supabase";
 import type { Employee, Shift, WeatherForecast } from "@/lib/types";
 import type { AttendanceSessionWithEmployee } from "@/lib/supabase/attendance";
+
+const GanttScheduleCanvas = dynamic(
+  () => import("./gantt-schedule-canvas"),
+  { ssr: false, loading: () => <DashboardSkeleton type="gantt-canvas" /> }
+);
 
 // ─── Time / Gantt helpers ──────────────────────────────────────────────────────
 
@@ -53,22 +59,6 @@ function shiftHours(start: string, end: string): number {
   return (eh * 60 + em - (sh * 60 + sm)) / 60;
 }
 
-const HOUR_START = 6;
-const HOUR_END = 24;
-const TOTAL_MINS = (HOUR_END - HOUR_START) * 60;
-const HOUR_TICKS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
-
-function toLeftPct(time: string): number {
-  const [h, m] = time.split(":").map(Number);
-  return Math.max(0, Math.min(100, ((h * 60 + m - HOUR_START * 60) / TOTAL_MINS) * 100));
-}
-
-function toWidthPct(start: string, end: string): number {
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  return Math.max(0.5, (((eh * 60 + em) - (sh * 60 + sm)) / TOTAL_MINS) * 100);
-}
-
 // ─── Role palette ──────────────────────────────────────────────────────────────
 
 const ROLE_PALETTE: Record<string, { bg: string; text: string; border: string }> = {
@@ -78,10 +68,6 @@ const ROLE_PALETTE: Record<string, { bg: string; text: string; border: string }>
   sales:       { bg: "#dcfce7", text: "#15803d", border: "#86efac" },
   reception:   { bg: "#fce7f3", text: "#9d174d", border: "#f9a8d4" },
 };
-
-function rolePalette(role: string) {
-  return ROLE_PALETTE[role.toLowerCase()] ?? { bg: "#ede9fe", text: "#4338ca", border: "#a5b4fc" };
-}
 
 // ─── Avatar helpers ───────────────────────────────────────────────────────────
 
@@ -278,275 +264,6 @@ function FilterPopover({
               })
             )}
           </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ─── Gantt row ────────────────────────────────────────────────────────────────
-
-function GanttRow({
-  employee,
-  dayShifts,
-  canEdit,
-  selectedDay,
-  employees,
-  onOpenChangeState,
-  onCreated,
-  onUpdated,
-  onDeleted,
-}: {
-  employee: Employee;
-  dayShifts: Shift[];
-  canEdit: boolean;
-  selectedDay: string;
-  employees: Employee[];
-  onOpenChangeState?: (isOpen: boolean) => void;
-  onCreated: (form: ShiftForm) => Promise<void>;
-  onUpdated: (shiftId: string, form: ShiftForm) => Promise<void>;
-  onDeleted: (shiftId: string) => Promise<void>;
-}) {
-  const bg = avatarColor(employee.name);
-  const inits = initials(employee.name);
-  const hasShifts = dayShifts.length > 0;
-
-  return (
-    <div
-      className="flex items-stretch border-b border-slate-100 last:border-0"
-      style={{ opacity: hasShifts ? 1 : 0.55 }}
-    >
-      {/* Employee label column */}
-      <div className="flex shrink-0 items-center gap-2.5 border-r border-slate-100 bg-white px-4 py-2"
-        style={{ width: 220, minWidth: 220 }}>
-        <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
-          style={{ backgroundColor: bg }}
-        >
-          {inits}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold text-slate-800">{employee.name}</div>
-          <div className="truncate text-[11px] capitalize text-slate-400">{employee.role}</div>
-        </div>
-        {canEdit && (
-          <ShiftPopover
-            trigger={
-              <button
-                type="button"
-                className="shrink-0 rounded-full p-1 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-600"
-                title="Add shift"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-            }
-            title={`Add shift — ${employee.name}`}
-            employees={employees}
-            defaultForm={{ employeeId: employee.id, date: selectedDay, startTime: "10:00", endTime: "18:00", role: employee.role ?? "service" }}
-            onOpenChangeState={onOpenChangeState}
-            onSave={onCreated}
-          />
-        )}
-      </div>
-
-      {/* Timeline column */}
-      <div className="relative flex-1 bg-slate-50" style={{ height: 56 }}>
-        {/* Hour grid lines */}
-        {HOUR_TICKS.map((h) => (
-          <div
-            key={h}
-            className="absolute inset-y-0 border-l border-slate-200"
-            style={{ left: `${((h - HOUR_START) / (HOUR_END - HOUR_START)) * 100}%` }}
-          />
-        ))}
-
-        {/* Shift bars */}
-        {dayShifts.map((shift) => {
-          const pal = rolePalette(shift.role);
-          const left = toLeftPct(shift.startTime);
-          const width = toWidthPct(shift.startTime, shift.endTime);
-          const barContent = (
-            <div
-              className="absolute flex items-center overflow-hidden rounded-md px-2 text-[11px] font-semibold"
-              style={{
-                top: 8,
-                bottom: 8,
-                left: `${left}%`,
-                width: `${width}%`,
-                backgroundColor: pal.bg,
-                color: pal.text,
-                border: `1px solid ${pal.border}`,
-              }}
-            >
-              <span className="truncate">
-                {shift.role}&nbsp;·&nbsp;{shift.startTime.slice(0, 5)}–{shift.endTime.slice(0, 5)}
-              </span>
-            </div>
-          );
-
-          if (!canEdit) return <React.Fragment key={shift.id}>{barContent}</React.Fragment>;
-
-          return (
-            <ShiftPopover
-              key={shift.id}
-              trigger={
-                <button
-                  type="button"
-                  className="absolute transition-opacity hover:opacity-75"
-                  style={{ top: 8, bottom: 8, left: `${left}%`, width: `${width}%` }}
-                  title={`${employee.name}: ${shift.startTime.slice(0, 5)}–${shift.endTime.slice(0, 5)} · ${shift.role}`}
-                >
-                  <div
-                    className="flex h-full w-full items-center overflow-hidden rounded-md px-2 text-[11px] font-semibold"
-                    style={{ backgroundColor: pal.bg, color: pal.text, border: `1px solid ${pal.border}` }}
-                  >
-                    <span className="truncate">
-                      {shift.role}&nbsp;·&nbsp;{shift.startTime.slice(0, 5)}–{shift.endTime.slice(0, 5)}
-                    </span>
-                  </div>
-                </button>
-              }
-              title={`Edit shift — ${employee.name}`}
-              employees={employees}
-              editingShiftId={shift.id}
-              defaultForm={{ employeeId: shift.employeeId, date: shift.date, startTime: shift.startTime, endTime: shift.endTime, role: shift.role }}
-              onOpenChangeState={onOpenChangeState}
-              onSave={(form) => onUpdated(shift.id, form)}
-              onDelete={() => onDeleted(shift.id)}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type ShiftForm = {
-  employeeId: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  role: string;
-};
-
-// ─── Shift form popover ───────────────────────────────────────────────────────
-
-function ShiftPopover({
-  trigger,
-  title,
-  employees,
-  defaultForm,
-  editingShiftId = null,
-  onOpenChangeState,
-  onSave,
-  onDelete,
-}: {
-  trigger: React.ReactNode;
-  title: string;
-  employees: Employee[];
-  defaultForm: ShiftForm;
-  editingShiftId?: string | null;
-  onOpenChangeState?: (isOpen: boolean) => void;
-  onSave: (form: ShiftForm) => Promise<void>;
-  onDelete?: () => Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<ShiftForm>(defaultForm);
-  const [saving, setSaving] = useState(false);
-  const { isDegraded } = useDatabaseStatus();
-  const { lang } = useLanguage();
-
-  function handleOpenChange(next: boolean) {
-    if (next) setForm(defaultForm);
-    setOpen(next);
-    onOpenChangeState?.(next);
-  }
-
-  async function handleSave() {
-    if (isDegraded) {
-      toast.error(
-        lang === "sv"
-          ? "Databasen startar upp. Vänta ett ögonblick innan du sparar pass."
-          : "Database is currently waking up. Please wait a moment before saving shifts."
-      );
-      return;
-    }
-    setSaving(true);
-    try {
-      await onSave(form);
-      setOpen(false);
-      onOpenChangeState?.(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!onDelete) return;
-    if (isDegraded) {
-      toast.error(
-        lang === "sv"
-          ? "Databasen startar upp. Vänta ett ögonblick innan du tar bort pass."
-          : "Database is currently waking up. Please wait a moment before deleting shifts."
-      );
-      return;
-    }
-    setSaving(true);
-    try {
-      await onDelete();
-      setOpen(false);
-      onOpenChangeState?.(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent className="w-72" align="start">
-        <p className="mb-3 text-[13px] font-semibold text-slate-800">{title}</p>
-        <div className="grid gap-2">
-          <select
-            value={form.employeeId}
-            onChange={(e) => {
-              const emp = employees.find((em) => em.id === e.target.value);
-              setForm((prev) => ({ ...prev, employeeId: e.target.value, role: emp?.role ?? prev.role }));
-            }}
-            className="filter-input text-sm"
-          >
-            {employees.map((emp) => (
-              <option key={emp.id} value={emp.id}>{emp.name}</option>
-            ))}
-          </select>
-          <Input type="date" value={form.date} className="h-10 text-sm" onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))} />
-          <div className="grid grid-cols-2 gap-2">
-            <Input type="time" value={form.startTime} className="h-10 text-sm" onChange={(e) => setForm((prev) => ({ ...prev, startTime: e.target.value }))} />
-            <Input type="time" value={form.endTime} className="h-10 text-sm" onChange={(e) => setForm((prev) => ({ ...prev, endTime: e.target.value }))} />
-          </div>
-          <select
-            value={form.role}
-            onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
-            className="filter-input text-sm"
-          >
-            <option value="service">Service</option>
-            <option value="shiftleader">Shift leader</option>
-            <option value="rutin">Rutin</option>
-            <option value="sales">Sales</option>
-            <option value="reception">Reception</option>
-          </select>
-        </div>
-        <div className="mt-3 flex items-center justify-end gap-2">
-          {editingShiftId && onDelete && (
-            <Button size="sm" variant="outline" disabled={saving} onClick={() => void handleDelete()}>
-              Delete
-            </Button>
-          )}
-          <Button size="sm" disabled={saving} onClick={() => void handleSave()}>
-            {editingShiftId ? "Save" : "Add shift"}
-          </Button>
         </div>
       </PopoverContent>
     </Popover>
@@ -1007,48 +724,18 @@ function SchedulePageContent() {
             <div className="py-14 text-center text-sm text-slate-400">Loading schedule…</div>
           ) : (
             <ErrorBoundary>
-              <div className="overflow-x-auto">
-                {/* Time header row */}
-                <div className="flex border-b border-slate-200 bg-slate-50/80" style={{ minWidth: 820 }}>
-                  <div className="shrink-0 border-r border-slate-100 px-4 py-2" style={{ width: 220, minWidth: 220 }}>
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Employee</span>
-                  </div>
-                  <div className="relative flex-1" style={{ height: 28 }}>
-                    {HOUR_TICKS.map((h) => (
-                      <div
-                        key={h}
-                        className="absolute top-0 flex h-full items-center"
-                        style={{ left: `${((h - HOUR_START) / (HOUR_END - HOUR_START)) * 100}%` }}
-                      >
-                        <span className="pl-1 text-[10px] text-slate-400">
-                          {String(h).padStart(2, "0")}:00
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {/* Employee rows */}
-                <div style={{ minWidth: 820 }}>
-                  {sortedEmployees.length === 0 ? (
-                    <div className="py-14 text-center text-sm text-slate-400">{t.noShifts}</div>
-                  ) : (
-                    sortedEmployees.map((emp) => (
-                      <GanttRow
-                        key={emp.id}
-                        employee={emp}
-                        dayShifts={selectedDayShiftsByEmployee.get(emp.id) ?? []}
-                        canEdit={canEdit}
-                        selectedDay={selectedDay}
-                        employees={employees}
-                        onOpenChangeState={setIsShiftEditing}
-                        onCreated={handleCreate}
-                        onUpdated={handleUpdate}
-                        onDeleted={handleDelete}
-                      />
-                    ))
-                  )}
-                </div>
-              </div>
+              <GanttScheduleCanvas
+                sortedEmployees={sortedEmployees}
+                selectedDayShiftsByEmployee={selectedDayShiftsByEmployee}
+                canEdit={canEdit}
+                selectedDay={selectedDay}
+                employees={employees}
+                onOpenChangeState={setIsShiftEditing}
+                onCreated={handleCreate}
+                onUpdated={handleUpdate}
+                onDeleted={handleDelete}
+                lang={lang}
+              />
             </ErrorBoundary>
           )
         )}
@@ -1255,7 +942,7 @@ function AttendanceTabView({
 
 export default function SchedulePage() {
   return (
-    <Suspense fallback={<div>Loading…</div>}>
+    <Suspense fallback={<DashboardSkeleton type="schedule" />}>
       <SchedulePageContent />
     </Suspense>
   );

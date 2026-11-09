@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useLocation } from "@/context/LocationContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { toast } from "sonner";
+import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import {
   Play,
   Pause,
@@ -287,6 +288,15 @@ export default function SalesPage() {
     const d = new Date(status.currentTime);
     return d.toISOString().replace("T", " ").substring(0, 19) + " UTC";
   }, [status?.currentTime]);
+
+  if (loading && !status) {
+    return (
+      <div className="space-y-6 pb-12">
+        <DashboardSkeleton type="grid" />
+        <DashboardSkeleton type="table" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12">
