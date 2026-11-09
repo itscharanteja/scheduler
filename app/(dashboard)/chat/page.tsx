@@ -541,7 +541,8 @@ export default function ChatPage() {
   const [activeChannelId, setActiveChannelId] = useState("");
   const [query, setQuery] = useState("");
   const [drafts, setDrafts] = useState<DraftState>({});
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isInitialMount = useRef(true);
 
   const text =
     lang === "sv"
@@ -580,7 +581,7 @@ export default function ChatPage() {
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [locationId]);
 
   // Load messages when channel changes
   useEffect(() => {
@@ -606,9 +607,27 @@ export default function ChatPage() {
     return () => { active = false; };
   }, [activeChannelId, user?.employeeId]);
 
-  // Auto-scroll to bottom
+  // Reset initial mount flag on channel switch so switching channels jumps instantly
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    isInitialMount.current = true;
+  }, [activeChannelId]);
+
+  // Auto-scroll to bottom of messages container without scrolling the outer page/window
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    if (isInitialMount.current) {
+      container.scrollTop = container.scrollHeight;
+      if (messages.length > 0) {
+        isInitialMount.current = false;
+      }
+    } else {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   }, [messages]);
 
   const filteredChannels = useMemo(
@@ -722,9 +741,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+    <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)] xl:h-[calc(100vh-210px)] xl:min-h-[600px]">
       {/* ── Sidebar ── */}
-      <aside className="app-panel p-4">
+      <aside className="app-panel flex flex-col p-4 overflow-hidden max-h-[320px] xl:max-h-none">
         <div className="flex items-center justify-between gap-2">
           <h2 className="section-title">{text.channels}</h2>
           {isAdmin && (
@@ -747,9 +766,9 @@ export default function ChatPage() {
             className="pl-9"
           />
         </label>
-        <div className="mt-4 list-block">
+        <div className="mt-4 list-block content-start auto-rows-max flex-1 overflow-y-auto">
           {channelsLoading ? (
-            <div className="py-6 text-center text-sm text-slate-400">Loading…</div>
+            <div className="py-6 text-center text-sm text-slate-400 h-auto self-start w-full">Loading…</div>
           ) : (
             filteredChannels.map((channel) => {
               const isActive = channel.id === activeChannel?.id;
@@ -759,7 +778,7 @@ export default function ChatPage() {
                 isSuperAdmin ||
                 (myEmployeeId !== null && channel.createdBy === myEmployeeId);
               return (
-                <div key={channel.id} className={`group list-row ${isActive ? "surface-info" : ""}`}>
+                <div key={channel.id} className={`group list-row ${isActive ? "surface-info" : ""} h-auto shrink-0 self-start w-full`}>
                   <button
                     type="button"
                     onClick={() => setActiveChannelId(channel.id)}
@@ -801,7 +820,7 @@ export default function ChatPage() {
       </aside>
 
       {/* ── Chat panel ── */}
-      <section className="app-panel flex min-h-[720px] flex-col overflow-hidden">
+      <section className="app-panel flex flex-1 flex-col overflow-hidden min-h-[500px]">
         {/* Header */}
         <div className="border-b border-slate-200 px-5 py-4">
           <div className="flex items-center justify-between gap-3">
@@ -822,7 +841,7 @@ export default function ChatPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-5 py-5">
+        <div ref={messagesContainerRef} className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-5 py-5">
           {messagesLoading ? (
             <div className="flex h-full items-center justify-center text-sm text-slate-400">Loading messages…</div>
           ) : visibleMessages.length === 0 ? (
@@ -840,7 +859,6 @@ export default function ChatPage() {
               />
             ))
           )}
-          <div ref={bottomRef} />
         </div>
 
         {/* Composer */}

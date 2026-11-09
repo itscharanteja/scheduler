@@ -23,10 +23,27 @@ export const supabaseClient: SupabaseClient | undefined =
 export const isSupabaseConfigured = Boolean(supabaseClient);
 
 export function normalizeSupabaseError(error: unknown, operation: string): Error {
-  if (error instanceof Error && /Failed to fetch/i.test(error.message)) {
-    return new Error(
+  if (
+    error instanceof Error &&
+    (error.name === "AbortError" ||
+      error.name === "TimeoutError" ||
+      /abort|timeout/i.test(error.message))
+  ) {
+    const err = new Error(
+      `[supabase:${operation}] Query aborted or timed out: ${error.message}`
+    );
+    err.name = "AbortError";
+    return err;
+  }
+  if (
+    error instanceof Error &&
+    (/Failed to fetch/i.test(error.message) || error.name === "NetworkError")
+  ) {
+    const err = new Error(
       `[supabase:${operation}] Network error: unable to reach Supabase. Check internet, VPN/firewall, and that your Supabase project is active.`
     );
+    err.name = "NetworkError";
+    return err;
   }
   if (error instanceof Error) return error;
   return new Error(`[supabase:${operation}] Unknown error.`);

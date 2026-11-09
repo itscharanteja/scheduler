@@ -43,7 +43,7 @@ const DEFAULT_INVENTORY: InventoryState[] = [
 export class SimulationEngine {
   public locationId: string = LOCATION_ID;
   public currentTime: Date;
-  public running: boolean = true;
+  public running: boolean = false;
   public speed: number = 1.0;
   public realSecondsPerSimMinute: number = 2.5; // 2.5 real seconds per sim minute for smooth demo pacing
   
@@ -70,7 +70,7 @@ export class SimulationEngine {
     this.currentTime = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 8, 0, 0));
     this.initInventory();
     this.initPreloadSales();
-    this.startClock();
+    // Manual mode by default: do not startClock() automatically
   }
 
   private initInventory() {
@@ -122,6 +122,10 @@ export class SimulationEngine {
 
   public pause() {
     this.running = false;
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
     this.emit({
       type: "clock",
       data: {
@@ -157,7 +161,9 @@ export class SimulationEngine {
 
   public setSpeed(multiplier: number) {
     this.speed = Math.max(0.1, Math.min(50, multiplier));
-    this.startClock();
+    if (this.running) {
+      this.startClock();
+    }
     this.emit({
       type: "clock",
       data: {
@@ -260,9 +266,13 @@ export class SimulationEngine {
   }
 
   public async reset(): Promise<void> {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
     const now = new Date();
     this.currentTime = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 8, 0, 0));
-    this.running = true;
+    this.running = false;
     this.speed = 1.0;
     this.rushUntil = null;
     this.weatherUntil = null;
@@ -281,7 +291,6 @@ export class SimulationEngine {
         metrics: this.getStatus().metrics,
       },
     });
-    this.startClock();
   }
 
   public async tick(minutesToAdvance = 1): Promise<SimEvent[]> {

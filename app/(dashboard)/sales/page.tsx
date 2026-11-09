@@ -297,9 +297,21 @@ export default function SalesPage() {
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
               {lang === "sv" ? "Försäljningssimulator & Realtidsanalys" : "Sales Simulator & Live Operations"}
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-              {lang === "sv" ? "Direktsändning" : "Live QSR Simulator"}
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                status?.running
+                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                  : "bg-slate-100 text-slate-700 border border-slate-300"
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  status?.running ? "bg-emerald-600 animate-pulse" : "bg-slate-400"
+                }`}
+              />
+              {status?.running
+                ? (lang === "sv" ? "Körs" : "Live Running")
+                : (lang === "sv" ? "Manuell / Pausad" : "Manual Mode")}
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">

@@ -1,6 +1,6 @@
 import { addDays, endOfMonth, format, startOfMonth, startOfWeek } from "date-fns";
 import type { Shift, WeekSchedule } from "@/lib/types";
-import { getRuntimeStore } from "@/lib/server/runtime-store";
+import { getMockDataStore } from "./mock-store";
 import { supabaseClient, requireClient, normalizeSupabaseError } from "./client";
 
 type DbShiftRow = {
@@ -48,7 +48,8 @@ function mapShift(row: DbShiftRow): Shift {
 
 export async function getShiftsByWeek(
   weekStart: string | Date,
-  locationId?: string
+  locationId?: string,
+  signal?: AbortSignal
 ): Promise<WeekSchedule> {
   try {
     const start = startOfWeek(
@@ -60,7 +61,7 @@ export async function getShiftsByWeek(
     const endDateStr = format(end, "yyyy-MM-dd");
 
     if (!supabaseClient) {
-      const store = getRuntimeStore();
+      const store = getMockDataStore();
       const shifts = store.shifts
         .filter((s) => s.date >= startDateStr && s.date <= endDateStr)
         .filter((s) => !locationId || s.locationId === locationId)
@@ -74,6 +75,7 @@ export async function getShiftsByWeek(
       .gte("date", startDateStr)
       .lte("date", endDateStr);
     if (locationId) query = query.eq("location_id", locationId);
+    if (signal) query = query.abortSignal(signal);
     const { data, error } = await query.order("date", { ascending: true });
     if (error) throw error;
     const mappedShifts: Shift[] = ((data ?? []) as unknown as DbShiftRowWithEmployee[]).map((row) =>
@@ -87,14 +89,15 @@ export async function getShiftsByWeek(
 
 export async function getShiftsByMonth(
   monthDate: string | Date,
-  locationId?: string
+  locationId?: string,
+  signal?: AbortSignal
 ): Promise<Shift[]> {
   try {
     const base = typeof monthDate === "string" ? new Date(monthDate) : monthDate;
     const start = startOfMonth(base);
     const end = endOfMonth(base);
     if (!supabaseClient) {
-      const store = getRuntimeStore();
+      const store = getMockDataStore();
       const startDate = start.toISOString().slice(0, 10);
       const endDate = end.toISOString().slice(0, 10);
       return store.shifts
@@ -108,6 +111,7 @@ export async function getShiftsByMonth(
       .gte("date", start.toISOString().slice(0, 10))
       .lte("date", end.toISOString().slice(0, 10));
     if (locationId) query = query.eq("location_id", locationId);
+    if (signal) query = query.abortSignal(signal);
     const { data, error } = await query.order("date", { ascending: true });
     if (error) throw error;
     return ((data ?? []) as unknown as DbShiftRowWithEmployee[]).map((row) =>
@@ -132,7 +136,7 @@ export type CreateShiftInput = {
 
 export async function createShift(input: CreateShiftInput): Promise<Shift> {
   if (!supabaseClient) {
-    const store = getRuntimeStore();
+    const store = getMockDataStore();
     const employeeName = store.employees.find((e) => e.id === input.employeeId)?.name ?? "";
     const shift: Shift = {
       id: `mock-shift-${Date.now()}`,
@@ -177,7 +181,7 @@ export type UpdateShiftInput = Partial<Omit<CreateShiftInput, "employeeId">> & {
 
 export async function updateShift(id: string, input: UpdateShiftInput): Promise<Shift> {
   if (!supabaseClient) {
-    const store = getRuntimeStore();
+    const store = getMockDataStore();
     const existing = store.shifts.find((s) => s.id === id);
     if (!existing) throw new Error("Shift not found.");
     const employeeId = input.employeeId ?? existing.employeeId;
@@ -223,7 +227,7 @@ export async function updateShift(id: string, input: UpdateShiftInput): Promise<
 
 export async function deleteShift(id: string): Promise<void> {
   if (!supabaseClient) {
-    const store = getRuntimeStore();
+    const store = getMockDataStore();
     store.shifts = store.shifts.filter((s) => s.id !== id);
     return;
   }

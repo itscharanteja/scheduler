@@ -1,5 +1,5 @@
 import type { Employee } from "@/lib/types";
-import { getRuntimeStore } from "@/lib/server/runtime-store";
+import { getMockDataStore } from "./mock-store";
 import { supabaseClient, requireClient, normalizeSupabaseError } from "./client";
 
 type DbEmployeeRow = {
@@ -30,14 +30,15 @@ function mapEmployee(row: DbEmployeeRow): Employee {
   };
 }
 
-export async function getEmployees(locationId?: string): Promise<Employee[]> {
+export async function getEmployees(locationId?: string, signal?: AbortSignal): Promise<Employee[]> {
   try {
     if (!supabaseClient) {
-      const all = getRuntimeStore().employees.slice().sort((a, b) => a.name.localeCompare(b.name));
+      const all = getMockDataStore().employees.slice().sort((a, b) => a.name.localeCompare(b.name));
       return locationId ? all.filter((e) => e.locationId === locationId) : all;
     }
     let query = supabaseClient.from("employees").select("*").order("name", { ascending: true }).limit(500);
     if (locationId) query = query.eq("location_id", locationId);
+    if (signal) query = query.abortSignal(signal);
     const { data, error } = await query;
     if (error) throw error;
     return (data as DbEmployeeRow[]).map(mapEmployee);
@@ -59,7 +60,7 @@ export type CreateEmployeeInput = {
 
 export async function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
   if (!supabaseClient) {
-    const store = getRuntimeStore();
+    const store = getMockDataStore();
     const employee: Employee = {
       id: `mock-employee-${Date.now()}`,
       name: input.name,
@@ -98,7 +99,7 @@ export type UpdateEmployeeInput = Partial<CreateEmployeeInput>;
 
 export async function updateEmployee(id: string, input: UpdateEmployeeInput): Promise<Employee> {
   if (!supabaseClient) {
-    const store = getRuntimeStore();
+    const store = getMockDataStore();
     const existing = store.employees.find((e) => e.id === id);
     if (!existing) throw new Error("Employee not found.");
     const updated: Employee = {
@@ -139,7 +140,7 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
 
 export async function deleteEmployee(id: string): Promise<void> {
   if (!supabaseClient) {
-    const store = getRuntimeStore();
+    const store = getMockDataStore();
     store.employees = store.employees.filter((e) => e.id !== id);
     store.shifts = store.shifts.filter((s) => s.employeeId !== id);
     return;

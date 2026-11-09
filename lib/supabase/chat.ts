@@ -1,5 +1,5 @@
 import type { ChatChannel, ChatMessage, ChannelMember } from "@/lib/types";
-import { supabaseClient, requireClient } from "./client";
+import { supabaseClient, requireClient, normalizeSupabaseError } from "./client";
 
 type DbChatChannelRow = {
   id: string;
@@ -83,18 +83,19 @@ function mapChannelMember(row: DbChannelMemberRow): ChannelMember {
   };
 }
 
-export async function getChannels(locationId: string): Promise<ChatChannel[]> {
+export async function getChannels(locationId: string, signal?: AbortSignal): Promise<ChatChannel[]> {
   try {
     if (!supabaseClient) return [];
-    const { data, error } = await supabaseClient
+    let query = supabaseClient
       .from("chat_channels")
       .select("*")
       .eq("location_id", locationId);
+    if (signal) query = query.abortSignal(signal);
+    const { data, error } = await query;
     if (error) throw error;
     return (data as DbChatChannelRow[]).map(mapChatChannel);
   } catch (error) {
-    console.error("[supabase:getChannels]", error);
-    return [];
+    throw normalizeSupabaseError(error, "getChannels");
   }
 }
 
@@ -123,7 +124,7 @@ export async function sendMessage(payload: {
   }
 }
 
-export async function getMessages(channelId: string, limit?: number): Promise<ChatMessage[]> {
+export async function getMessages(channelId: string, limit?: number, signal?: AbortSignal): Promise<ChatMessage[]> {
   try {
     if (!supabaseClient) return [];
     let query = supabaseClient
@@ -132,12 +133,12 @@ export async function getMessages(channelId: string, limit?: number): Promise<Ch
       .eq("channel_id", channelId)
       .order("created_at", { ascending: true });
     if (limit) query = query.limit(limit);
+    if (signal) query = query.abortSignal(signal);
     const { data, error } = await query;
     if (error) throw error;
     return (data as unknown as DbChatMessageRow[]).map(mapChatMessage);
   } catch (error) {
-    console.error("[supabase:getMessages]", error);
-    return [];
+    throw normalizeSupabaseError(error, "getMessages");
   }
 }
 

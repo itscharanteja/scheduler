@@ -1,8 +1,9 @@
-import { supabaseClient, requireClient } from "./client";
+import { supabaseClient, requireClient, normalizeSupabaseError } from "./client";
 
 export async function getTasks(
   locationId: string,
-  filter?: { assigneeId?: string; createdBy?: string }
+  filter?: { assigneeId?: string; createdBy?: string },
+  signal?: AbortSignal
 ): Promise<any[]> {
   try {
     if (!supabaseClient) return [];
@@ -17,6 +18,8 @@ export async function getTasks(
         .not("assignee_id", "is", null)
         .or(`assignee_id.eq.${filter.assigneeId},created_by.eq.${filter.createdBy}`);
     }
+
+    if (signal) query = query.abortSignal(signal);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -36,8 +39,7 @@ export async function getTasks(
       completedAt: row.completed_at ?? null,
     }));
   } catch (error) {
-    console.error("[supabase:getTasks]", error);
-    return [];
+    throw normalizeSupabaseError(error, "getTasks");
   }
 }
 

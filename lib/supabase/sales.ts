@@ -1,5 +1,5 @@
 import type { SalesDay } from "@/lib/types";
-import { supabaseClient } from "./client";
+import { supabaseClient, normalizeSupabaseError } from "./client";
 
 type DbDailySalesRow = {
   id: string;
@@ -29,22 +29,29 @@ function mapDailySales(row: DbDailySalesRow): SalesDay {
   };
 }
 
-export async function getSales(locationId: string, limit = 7): Promise<SalesDay[]> {
+export async function getSales(
+  locationId: string,
+  limit = 7,
+  signal?: AbortSignal
+): Promise<SalesDay[]> {
   let sales: SalesDay[] = [];
   try {
     if (supabaseClient) {
-      const { data, error } = await supabaseClient
+      let query = supabaseClient
         .from("daily_sales")
         .select("*")
         .eq("location_id", locationId)
         .order("date", { ascending: false })
         .limit(limit);
-      if (!error && data) {
+      if (signal) query = query.abortSignal(signal);
+      const { data, error } = await query;
+      if (error) throw error;
+      if (data) {
         sales = (data as DbDailySalesRow[]).map(mapDailySales);
       }
     }
   } catch (error) {
-    console.error("[supabase:getSales]", error);
+    throw normalizeSupabaseError(error, "getSales");
   }
 
   // Merge live simulator data if running

@@ -1,5 +1,5 @@
 import type { EmployeeActivityItem } from "@/lib/types";
-import { supabaseClient } from "./client";
+import { supabaseClient, normalizeSupabaseError } from "./client";
 
 type DbEmployeeActivityRow = {
   id: string;
@@ -22,39 +22,46 @@ function mapEmployeeActivity(row: DbEmployeeActivityRow): EmployeeActivityItem {
   };
 }
 
-export async function getActivity(locationId: string, limit = 20): Promise<EmployeeActivityItem[]> {
+export async function getActivity(
+  locationId: string,
+  limit = 20,
+  signal?: AbortSignal
+): Promise<EmployeeActivityItem[]> {
   if (!supabaseClient) return [];
   try {
-    const { data, error } = await supabaseClient
+    let query = supabaseClient
       .from("employee_activity")
       .select("*")
       .eq("location_id", locationId)
       .order("timestamp", { ascending: false })
       .limit(limit);
+    if (signal) query = query.abortSignal(signal);
+    const { data, error } = await query;
     if (error) throw error;
     return (data as DbEmployeeActivityRow[]).map(mapEmployeeActivity);
   } catch (error) {
-    console.error("[supabase:getActivity]", error);
-    return [];
+    throw normalizeSupabaseError(error, "getActivity");
   }
 }
 
 export async function getEmployeeActivity(
   employeeId: string,
-  limit = 6
+  limit = 6,
+  signal?: AbortSignal
 ): Promise<EmployeeActivityItem[]> {
   if (!supabaseClient) return [];
   try {
-    const { data, error } = await supabaseClient
+    let query = supabaseClient
       .from("employee_activity")
       .select("*")
       .eq("employee_id", employeeId)
       .order("timestamp", { ascending: false })
       .limit(limit);
+    if (signal) query = query.abortSignal(signal);
+    const { data, error } = await query;
     if (error) throw error;
     return (data as DbEmployeeActivityRow[]).map(mapEmployeeActivity);
   } catch (error) {
-    console.error("[supabase:getEmployeeActivity]", error);
-    return [];
+    throw normalizeSupabaseError(error, "getEmployeeActivity");
   }
 }

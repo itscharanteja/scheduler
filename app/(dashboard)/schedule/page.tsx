@@ -22,6 +22,8 @@ import { useAuth } from "@/context/AuthContext";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useLocation } from "@/context/LocationContext";
 import { useShellData } from "@/components/app-shell";
+import { useDatabaseStatus } from "@/context/DatabaseStatusContext";
+import { useCachedQuery } from "@/lib/cache/swr-cache";
 import {
   createShift,
   deleteShift,
@@ -290,6 +292,7 @@ function GanttRow({
   canEdit,
   selectedDay,
   employees,
+  onOpenChangeState,
   onCreated,
   onUpdated,
   onDeleted,
@@ -299,6 +302,7 @@ function GanttRow({
   canEdit: boolean;
   selectedDay: string;
   employees: Employee[];
+  onOpenChangeState?: (isOpen: boolean) => void;
   onCreated: (form: ShiftForm) => Promise<void>;
   onUpdated: (shiftId: string, form: ShiftForm) => Promise<void>;
   onDeleted: (shiftId: string) => Promise<void>;
@@ -339,6 +343,7 @@ function GanttRow({
             title={`Add shift — ${employee.name}`}
             employees={employees}
             defaultForm={{ employeeId: employee.id, date: selectedDay, startTime: "10:00", endTime: "18:00", role: employee.role ?? "service" }}
+            onOpenChangeState={onOpenChangeState}
             onSave={onCreated}
           />
         )}
@@ -405,6 +410,7 @@ function GanttRow({
               employees={employees}
               editingShiftId={shift.id}
               defaultForm={{ employeeId: shift.employeeId, date: shift.date, startTime: shift.startTime, endTime: shift.endTime, role: shift.role }}
+              onOpenChangeState={onOpenChangeState}
               onSave={(form) => onUpdated(shift.id, form)}
               onDelete={() => onDeleted(shift.id)}
             />
@@ -433,6 +439,7 @@ function ShiftPopover({
   employees,
   defaultForm,
   editingShiftId = null,
+  onOpenChangeState,
   onSave,
   onDelete,
 }: {
@@ -441,23 +448,36 @@ function ShiftPopover({
   employees: Employee[];
   defaultForm: ShiftForm;
   editingShiftId?: string | null;
+  onOpenChangeState?: (isOpen: boolean) => void;
   onSave: (form: ShiftForm) => Promise<void>;
   onDelete?: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<ShiftForm>(defaultForm);
   const [saving, setSaving] = useState(false);
+  const { isDegraded } = useDatabaseStatus();
+  const { lang } = useLanguage();
 
   function handleOpenChange(next: boolean) {
     if (next) setForm(defaultForm);
     setOpen(next);
+    onOpenChangeState?.(next);
   }
 
   async function handleSave() {
+    if (isDegraded) {
+      toast.error(
+        lang === "sv"
+          ? "Databasen startar upp. Vänta ett ögonblick innan du sparar pass."
+          : "Database is currently waking up. Please wait a moment before saving shifts."
+      );
+      return;
+    }
     setSaving(true);
     try {
       await onSave(form);
       setOpen(false);
+      onOpenChangeState?.(false);
     } finally {
       setSaving(false);
     }
@@ -465,10 +485,19 @@ function ShiftPopover({
 
   async function handleDelete() {
     if (!onDelete) return;
+    if (isDegraded) {
+      toast.error(
+        lang === "sv"
+          ? "Databasen startar upp. Vänta ett ögonblick innan du tar bort pass."
+          : "Database is currently waking up. Please wait a moment before deleting shifts."
+      );
+      return;
+    }
     setSaving(true);
     try {
       await onDelete();
       setOpen(false);
+      onOpenChangeState?.(false);
     } finally {
       setSaving(false);
     }
@@ -528,7 +557,7 @@ function ShiftPopover({
 
 function SchedulePageContent() {
   const { lang } = useLanguage();
-  const { hasRole } = useAuth();
+  const { user, hasRole } = useAuth();
   const { locationId } = useLocation();
   const canEdit = hasRole("admin", "super_admin");
   const router = useRouter();
@@ -541,14 +570,33 @@ function SchedulePageContent() {
   const selectedDay = dayParam ?? todayStr;
 
   const { employees } = useShellData();
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [weather, setWeather] = useState<WeatherForecast[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isShiftEditing, setIsShiftEditing] = useState(false);
+  const weekStartStr = useMemo(() => format(weekStart, "yyyy-MM-dd"), [weekStart]);
 
-  // Attendance state
-  const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSessionWithEmployee[]>([]);
-  const [attendanceLoading, setAttendanceLoading] = useState(false);
-  const [scheduleView, setScheduleView] = useState<"schedule" | "attendance">("schedule");
+  const {
+    data: scheduleData,
+    isLoading: scheduleLoading,
+    hasStagedUpdate,
+    applyStagedUpdate,
+    refetch: refetchShifts,
+  } = useCachedQuery(
+    `shifts:week:${weekStartStr}`,
+    (signal) => getShiftsByWeek(weekStart, locationId, signal),
+    {
+      locationId,
+      userId: user?.id,
+      isEditing: isShiftEditing,
+    }
+  );
+
+  const [localShifts, setLocalShifts] = useState<Shift[] | null>(null);
+  const shifts = localShifts ?? scheduleData?.shifts ?? [];
+
+  useEffect(() => {
+    setLocalShifts(null);
+  }, [scheduleData]);
+
+  const [weather, setWeather] = useState<WeatherForecast[]>([]);
 
   // Filter state
   const [filterEmployeeIds, setFilterEmployeeIds] = useState<Set<string>>(new Set());
@@ -582,21 +630,22 @@ function SchedulePageContent() {
   useEffect(() => {
     let active = true;
     (async () => {
-      setLoading(true);
       try {
-        const [schedule, weatherRes] = await Promise.all([
-          getShiftsByWeek(weekStart, locationId),
-          fetch(`/api/weather?locationId=${locationId}`).then((r) => r.json()).catch(() => ({ forecasts: [] })),
-        ]);
-        if (!active) return;
-        setShifts(schedule.shifts);
-        setWeather(Array.isArray(weatherRes.forecasts) ? weatherRes.forecasts.slice(0, 3) : []);
-      } finally {
-        if (active) setLoading(false);
-      }
+        const weatherRes = await fetch(`/api/weather?locationId=${locationId}`).then((r) => r.json()).catch(() => ({ forecasts: [] }));
+        if (active) {
+          setWeather(Array.isArray(weatherRes.forecasts) ? weatherRes.forecasts.slice(0, 3) : []);
+        }
+      } catch {}
     })();
     return () => { active = false; };
-  }, [weekStart]);
+  }, [locationId]);
+
+  // Attendance state
+  const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSessionWithEmployee[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [scheduleView, setScheduleView] = useState<"schedule" | "attendance">("schedule");
+
+  const loading = scheduleLoading && shifts.length === 0;
 
   // Fetch attendance for the selected day (re-runs when day or location changes)
   useEffect(() => {
@@ -660,21 +709,38 @@ function SchedulePageContent() {
 
   async function handleCreate(form: ShiftForm) {
     const emp = employees.find((e) => e.id === form.employeeId);
-    const created = await createShift({ employeeId: form.employeeId, date: form.date, startTime: form.startTime, endTime: form.endTime, role: form.role, locationId: emp?.locationId ?? locationId, status: "draft" });
-    setShifts((prev) => [...prev, created]);
-    toast.success("Shift added");
+    const created = await createShift({
+      employeeId: form.employeeId,
+      date: form.date,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      role: form.role,
+      locationId: emp?.locationId ?? locationId,
+      status: "draft",
+    });
+    setLocalShifts([...shifts, created]);
+    toast.success(lang === "sv" ? "Pass tillagt" : "Shift added");
+    void refetchShifts();
   }
 
   async function handleUpdate(shiftId: string, form: ShiftForm) {
-    const updated = await updateShift(shiftId, { employeeId: form.employeeId, date: form.date, startTime: form.startTime, endTime: form.endTime, role: form.role });
-    setShifts((prev) => prev.map((s) => (s.id === shiftId ? updated : s)));
-    toast.success("Shift updated");
+    const updated = await updateShift(shiftId, {
+      employeeId: form.employeeId,
+      date: form.date,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      role: form.role,
+    });
+    setLocalShifts(shifts.map((s) => (s.id === shiftId ? updated : s)));
+    toast.success(lang === "sv" ? "Pass uppdaterat" : "Shift updated");
+    void refetchShifts();
   }
 
   async function handleDelete(shiftId: string) {
     await deleteShift(shiftId);
-    setShifts((prev) => prev.filter((s) => s.id !== shiftId));
-    toast.success("Shift deleted");
+    setLocalShifts(shifts.filter((s) => s.id !== shiftId));
+    toast.success(lang === "sv" ? "Pass borttaget" : "Shift deleted");
+    void refetchShifts();
   }
 
   // Base list: employees who have at least one shift this week
@@ -763,6 +829,7 @@ function SchedulePageContent() {
                 title={t.addShift}
                 employees={employees}
                 defaultForm={{ employeeId: employees[0]?.id ?? "", date: selectedDay, startTime: "10:00", endTime: "18:00", role: employees[0]?.role ?? "service" }}
+                onOpenChangeState={setIsShiftEditing}
                 onSave={handleCreate}
               />
             )}
@@ -831,6 +898,26 @@ function SchedulePageContent() {
 
       {/* ── Day panel: Schedule + Attendance tabs ── */}
       <div className="app-panel overflow-hidden">
+        {hasStagedUpdate && (
+          <div className="border-b border-blue-200 bg-blue-50 px-5 py-2.5 flex items-center justify-between text-xs text-blue-900">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-blue-600 shrink-0" />
+              <span>
+                {lang === "sv"
+                  ? "Nyare schemadata finns tillgänglig från databasen."
+                  : "Fresh schedule updates are available from the database."}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 border-blue-300 bg-white text-xs font-semibold text-blue-700 hover:bg-blue-100"
+              onClick={() => applyStagedUpdate()}
+            >
+              {lang === "sv" ? "Uppdatera vy" : "Update View"}
+            </Button>
+          </div>
+        )}
         {/* Panel header */}
         <div className="border-b border-slate-100 px-5 py-3">
           <div className="flex items-center justify-between">
@@ -953,6 +1040,7 @@ function SchedulePageContent() {
                         canEdit={canEdit}
                         selectedDay={selectedDay}
                         employees={employees}
+                        onOpenChangeState={setIsShiftEditing}
                         onCreated={handleCreate}
                         onUpdated={handleUpdate}
                         onDeleted={handleDelete}

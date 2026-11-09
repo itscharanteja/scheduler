@@ -32,6 +32,9 @@ import { toast } from "sonner";
 import { LanguageProvider, useLanguage } from "@/context/LanguageContext";
 import { useAuth, type UserRole } from "@/context/AuthContext";
 import { LocationProvider, useLocation } from "@/context/LocationContext";
+import { DatabaseStatusProvider } from "@/context/DatabaseStatusContext";
+import { useCachedQuery } from "@/lib/cache/swr-cache";
+import { ReconnectionBanner } from "@/components/reconnection-banner";
 import { getEmployees, getTasks, getChannels } from "@/lib/supabase";
 import type { Employee } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -144,34 +147,43 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
   const [branchOpen, setBranchOpen] = useState(false);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [logs, setLogs] = useState<any[]>([]);
-  const [openTaskCount, setOpenTaskCount] = useState(0);
-  const [unreadChatCount, setUnreadChatCount] = useState(0);
-  const [channelCount, setChannelCount] = useState(0);
+  const { data: employees = [] } = useCachedQuery<Employee[]>(
+    "employees",
+    (signal) => getEmployees(locationId, signal),
+    { locationId, userId: user?.id }
+  );
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const isMyTasks = !hasRole("admin", "super_admin");
-        const taskFilter = isMyTasks && user?.employeeId
-          ? { assigneeId: user.employeeId, createdBy: user.employeeId }
-          : undefined;
-        const [emps, taskData, channels] = await Promise.all([
-          getEmployees(locationId),
-          getTasks(locationId, taskFilter),
-          getChannels(locationId),
-        ]);
-        setEmployees(emps);
-        setLogs(taskData);
-        setOpenTaskCount(taskData.filter((t: any) => t.title && t.status !== "done").length);
-        setUnreadChatCount((channels as any[]).reduce((sum, ch) => sum + (ch.unread_count ?? 0), 0));
-        setChannelCount(channels.length);
-      } catch (error) {
-        console.error("[app-shell] Failed to load shell data:", error);
-      }
-    })();
-  }, [user?.employeeId, locationId]); // re-run when user or active branch changes
+  const isMyTasks = !hasRole("admin", "super_admin");
+  const taskFilter = useMemo(
+    () =>
+      isMyTasks && user?.employeeId
+        ? { assigneeId: user.employeeId, createdBy: user.employeeId }
+        : undefined,
+    [isMyTasks, user?.employeeId]
+  );
+  const taskKey = isMyTasks && user?.employeeId ? `tasks:my:${user.employeeId}` : "tasks:all";
+
+  const { data: logs = [] } = useCachedQuery<any[]>(
+    taskKey,
+    (signal) => getTasks(locationId, taskFilter, signal),
+    { locationId, userId: user?.id }
+  );
+
+  const { data: channels = [] } = useCachedQuery<any[]>(
+    "channels",
+    (signal) => getChannels(locationId, signal),
+    { locationId, userId: user?.id }
+  );
+
+  const openTaskCount = useMemo(
+    () => (logs || []).filter((t: any) => t.title && t.status !== "done").length,
+    [logs]
+  );
+
+  const unreadChatCount = useMemo(
+    () => (channels || []).reduce((sum: number, ch: any) => sum + (ch.unread_count ?? 0), 0),
+    [channels]
+  );
 
   const navItems = useMemo<NavItem[]>(
     () =>
@@ -438,6 +450,8 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               </div>
             </header>
 
+            <ReconnectionBanner />
+
             {mobileNavOpen ? (
               <div className="app-panel mt-4 p-3 lg:hidden">
                 <div className="space-y-1">
@@ -509,7 +523,9 @@ function LocationAwareShell({ children }: { children: React.ReactNode }) {
   const { hasRole } = useAuth();
   return (
     <LocationProvider isSuperAdmin={hasRole("super_admin")}>
-      <ShellLayout>{children}</ShellLayout>
+      <DatabaseStatusProvider>
+        <ShellLayout>{children}</ShellLayout>
+      </DatabaseStatusProvider>
     </LocationProvider>
   );
 }

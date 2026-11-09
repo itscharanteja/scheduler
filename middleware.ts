@@ -10,6 +10,36 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  const { pathname } = req.nextUrl;
+  const isLoginPage = pathname === "/login";
+  const isSignupPage = pathname === "/signup";
+  const isWelcomePage = pathname === "/welcome";
+  const isAuthFlow =
+    pathname.startsWith("/auth/") || pathname === "/reset-password";
+  // Kiosk page is intentionally public — it handles its own location scoping
+  const isKiosk = pathname.startsWith("/punch");
+  const isPublicRoute =
+    isLoginPage || isSignupPage || isWelcomePage || isAuthFlow || isKiosk;
+
+  // Inspect request cookies for existing Supabase auth tokens
+  const allCookies = req.cookies.getAll();
+  const hasAuthToken = allCookies.some(
+    (c) =>
+      c.name.includes("-auth-token") ||
+      (c.name.startsWith("sb-") && c.name.includes("token")) ||
+      c.name === "sb-access-token"
+  );
+
+  // If unauthenticated and accessing a protected route, fast-fail redirect immediately without remote query
+  if (!hasAuthToken && !isPublicRoute) {
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
+
+  // If unauthenticated on a public route, allow immediately
+  if (!hasAuthToken) {
+    return NextResponse.next();
+  }
+
   let res = NextResponse.next({ request: { headers: req.headers } });
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -26,23 +56,29 @@ export async function middleware(req: NextRequest) {
         );
       },
     },
+    global: {
+      fetch: (url, opts) =>
+        fetch(url, { ...opts, signal: AbortSignal.timeout(1500) }),
+    },
   });
 
-  // Refresh the session cookie if it's expiring — must happen before routing
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  // Query session with timeout guard. If remote Supabase is sleeping, fail open to client shell
+  let session = null;
+  try {
+    const {
+      data: { session: currentSession },
+    } = await supabase.auth.getSession();
+    session = currentSession;
+  } catch (err) {
+    console.warn(
+      `[middleware] Supabase getSession timed out or failed on ${pathname}:`,
+      err
+    );
+    // Request holds a session cookie: fail open to client shell where JWT claims are verified locally
+    return res;
+  }
 
-  const { pathname } = req.nextUrl;
-  const isLoginPage = pathname === "/login";
-  const isSignupPage = pathname === "/signup";
-  const isWelcomePage = pathname === "/welcome";
-  const isAuthFlow =
-    pathname.startsWith("/auth/") || pathname === "/reset-password";
-  // Kiosk page is intentionally public — it handles its own location scoping
-  const isKiosk = pathname.startsWith("/punch");
-
-  if (!session && !isLoginPage && !isSignupPage && !isWelcomePage && !isAuthFlow && !isKiosk) {
+  if (!session && !isPublicRoute) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 

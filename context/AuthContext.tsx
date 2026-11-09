@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { supabaseClient } from "@/lib/supabase";
+import { clearUserCache } from "@/lib/cache/swr-cache";
 
 export type UserRole = "super_admin" | "admin" | "user_lead" | "user";
 
@@ -121,6 +122,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     try {
+      if (user?.id) {
+        clearUserCache(user.id);
+      }
       if (supabaseClient) {
         await supabaseClient.auth.signOut();
       }
@@ -130,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       window.location.href = "/login";
     }
-  }, []);
+  }, [user?.id]);
 
   const hasRole = useCallback(
     (...roles: UserRole[]): boolean => {

@@ -1,5 +1,5 @@
 import type { DashboardAlert } from "@/lib/types";
-import { supabaseClient } from "./client";
+import { supabaseClient, normalizeSupabaseError } from "./client";
 
 type DbDashboardAlertRow = {
   id: string;
@@ -20,20 +20,21 @@ function mapDashboardAlert(row: DbDashboardAlertRow): DashboardAlert {
   };
 }
 
-export async function getAlerts(locationId: string): Promise<DashboardAlert[]> {
+export async function getAlerts(locationId: string, signal?: AbortSignal): Promise<DashboardAlert[]> {
   if (!supabaseClient) return [];
   try {
-    const { data, error } = await supabaseClient
+    let query = supabaseClient
       .from("dashboard_alerts")
       .select("*")
       .eq("location_id", locationId)
       .is("resolved_at", null)
       .order("created_at", { ascending: false });
+    if (signal) query = query.abortSignal(signal);
+    const { data, error } = await query;
     if (error) throw error;
     return (data as DbDashboardAlertRow[]).map(mapDashboardAlert);
   } catch (error) {
-    console.error("[supabase:getAlerts]", error);
-    return [];
+    throw normalizeSupabaseError(error, "getAlerts");
   }
 }
 

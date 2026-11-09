@@ -16,6 +16,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLocation } from "@/context/LocationContext";
 import { useShellData } from "@/components/app-shell";
+import { useCachedQuery } from "@/lib/cache/swr-cache";
 import {
   getShiftsByWeek,
   getTasks,
@@ -24,7 +25,6 @@ import {
   getActivity,
 } from "@/lib/supabase";
 import type {
-  Shift,
   SalesDay,
   DashboardAlert,
   EmployeeActivityItem,
@@ -51,51 +51,54 @@ export default function DashboardPage() {
   const isBasicUser = !hasRole("user_lead", "admin", "super_admin");
   const { employees: shellEmployees, unreadChatCount } = useShellData();
   const employeesCount = shellEmployees.length;
-  const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
-  const [logs, setLogs] = useState<any[]>([]);
-  const [todaySales, setTodaySales] = useState<SalesDay | null>(null);
-  const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
-  const [activity, setActivity] = useState<EmployeeActivityItem[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const todayKey = new Date().toISOString().split("T")[0];
   const weekStart = useMemo(
     () => startOfWeek(new Date(`${todayKey}T00:00:00`), { weekStartsOn: 1 }),
     [todayKey],
   );
+  const weekStartStr = useMemo(() => format(weekStart, "yyyy-MM-dd"), [weekStart]);
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        setLoading(true);
-        const [
-          schedule,
-          shiftLogs,
-          sales,
-          alertData,
-          activityData,
-        ] = await Promise.all([
-          getShiftsByWeek(weekStart, locationId),
-          getTasks(locationId),
-          getSales(locationId, 1),
-          getAlerts(locationId),
-          getActivity(locationId, 5),
-        ]);
-        if (!active) return;
-        setWeekShifts(schedule.shifts);
-        setLogs(shiftLogs);
-        setTodaySales(sales[0] ?? null);
-        setAlerts(alertData);
-        setActivity(activityData);
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [weekStart, locationId]);
+  const { data: scheduleData, isLoading: scheduleLoading } = useCachedQuery(
+    `shifts:week:${weekStartStr}`,
+    (signal) => getShiftsByWeek(weekStart, locationId, signal),
+    { locationId, userId: user?.id }
+  );
+  const weekShifts = scheduleData?.shifts ?? [];
+
+  const { data: logs = [] } = useCachedQuery<any[]>(
+    "tasks:dashboard",
+    (signal) => getTasks(locationId, undefined, signal),
+    { locationId, userId: user?.id }
+  );
+
+  const { data: initialSales = [] } = useCachedQuery<SalesDay[]>(
+    "sales:today",
+    (signal) => getSales(locationId, 1, signal),
+    { locationId, userId: user?.id }
+  );
+
+  const { data: cachedAlerts = [] } = useCachedQuery<DashboardAlert[]>(
+    "alerts:dashboard",
+    (signal) => getAlerts(locationId, signal),
+    { locationId, userId: user?.id }
+  );
+
+  const { data: cachedActivity = [] } = useCachedQuery<EmployeeActivityItem[]>(
+    "activity:dashboard",
+    (signal) => getActivity(locationId, 5, signal),
+    { locationId, userId: user?.id }
+  );
+
+  const [todaySales, setTodaySales] = useState<SalesDay | null>(null);
+  const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
+  const [activity, setActivity] = useState<EmployeeActivityItem[]>([]);
+
+  const currentSales = todaySales ?? initialSales[0] ?? null;
+  const currentAlerts = alerts.length > 0 ? alerts : cachedAlerts;
+  const currentActivity = activity.length > 0 ? activity : cachedActivity;
+
+  const loading = scheduleLoading && !scheduleData && weekShifts.length === 0;
 
   // Connect to live simulation SSE stream for instant Sales Today updates
   useEffect(() => {
@@ -300,15 +303,15 @@ export default function DashboardPage() {
   const cards = [
     {
       title: copy.sales,
-      value: todaySales
+      value: currentSales
         ? new Intl.NumberFormat("sv-SE", {
             style: "currency",
             currency: "SEK",
             maximumFractionDigits: 0,
-          }).format(todaySales.revenue)
+          }).format(currentSales.revenue)
         : "—",
-      note: todaySales
-        ? `${todaySales.orders} orders • ${todaySales.peakLabel}`
+      note: currentSales
+        ? `${currentSales.orders} orders • ${currentSales.peakLabel}`
         : copy.noSales,
       status: "status-success",
       actionHref: "/sales",
@@ -526,7 +529,7 @@ export default function DashboardPage() {
             </Button>
           </div>
           <div className="mt-4 list-block">
-            {alerts.slice(0, 3).map((alert) => (
+            {currentAlerts.slice(0, 3).map((alert) => (
               <div
                 key={alert.id}
                 className={`list-row ${alert.tone === "critical" ? "surface-danger" : alert.tone === "warning" ? "surface-warning" : "surface-info"}`}
@@ -561,7 +564,7 @@ export default function DashboardPage() {
             </Button>
           </div>
           <div className="mt-4 list-block">
-            {activity.map((item) => (
+            {currentActivity.map((item) => (
               <div key={item.id} className="list-row">
                 <div className="list-row-main">
                   <div className="list-row-title">{item.title}</div>
@@ -578,7 +581,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             ))}
-            {activity.length === 0 && !loading && (
+            {currentActivity.length === 0 && !loading && (
               <div className="px-4 py-6 text-center text-sm text-slate-500">
                 {lang === "sv" ? "Ingen aktivitet ännu." : "No activity yet."}
               </div>
