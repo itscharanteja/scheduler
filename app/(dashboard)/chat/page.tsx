@@ -371,7 +371,7 @@ function ManageMembersDialog({
                     onClick={() => void toggleMember(emp)}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-slate-50"
                   >
-                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${isMember ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}>
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${isMember ? "border-[#C65B3B] bg-[#C65B3B] text-white" : "border-[#E8D9CB]"}`}>
                       {isMember && <Check className="h-3 w-3" />}
                     </span>
                     <span className="flex-1 min-w-0">
@@ -477,11 +477,11 @@ function MessageBubble({
         <div
           className={`rounded-2xl px-4 py-3 ${
             message.mine
-              ? "bg-blue-600 text-white"
-              : "border border-slate-200 bg-white text-slate-900"
+              ? "bg-[#C65B3B] text-white"
+              : "border border-[#E8D9CB] bg-white text-[#30251F]"
           }`}
         >
-          <div className={`text-xs font-semibold ${message.mine ? "text-blue-100" : "text-slate-500"}`}>
+          <div className={`text-xs font-semibold ${message.mine ? "text-[#FFD5AF]" : "text-[#756458]"}`}>
             {message.employeeName} · {message.employeeRole}
           </div>
 
@@ -516,7 +516,7 @@ function MessageBubble({
             <p className="mt-1 text-sm leading-6">{message.content}</p>
           )}
 
-          <div className={`mt-2 flex items-center gap-1.5 text-[11px] ${message.mine ? "text-blue-100" : "text-slate-500"}`}>
+          <div className={`mt-2 flex items-center gap-1.5 text-[11px] ${message.mine ? "text-[#FFD5AF]" : "text-[#756458]"}`}>
             {fmtTime(message.timestamp)}
             {message.isEdited && <span className="opacity-70">(edited)</span>}
           </div>

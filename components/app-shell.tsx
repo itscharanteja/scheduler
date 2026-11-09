@@ -242,14 +242,18 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
         <aside className="app-sidebar">
           <div className="px-3">
             <div className="flex items-center justify-between gap-3">
-              <Link href="/" className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-                Skift
+              <Link href="/" className="inline-flex items-center gap-2 text-2xl font-semibold tracking-[-0.04em] text-[#30251F]">
+                <svg viewBox="0 0 32 32" fill="none" aria-hidden="true" className="h-6 w-6 text-[#C65B3B]">
+                  <path d="M6 7h8v8H6zM18 7h8v8h-8zM6 19h8v8H6z" fill="currentColor" />
+                  <path d="m21.5 17 6 6-6 6-6-6 6-6Z" fill="#F6BB86" />
+                </svg>
+                <span>skift<span className="text-[#C65B3B]">.</span></span>
               </Link>
               <span className="status-chip status-neutral">
                 {lang === "sv" ? "Drift" : "Operations"}
               </span>
             </div>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
+            <p className="mt-3 text-sm leading-6 text-[#756458]">
               {lang === "sv"
                 ? "Snabb arbetsyta för bemanning, uppgifter, meddelanden och AI-beslut."
                 : "Fast workspace for staffing, tasks, messages, and AI decisions."}
@@ -261,28 +265,28 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => setBranchOpen((v) => !v)}
-                className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                className="flex w-full items-center gap-2 rounded-lg border border-[#E8D9CB] bg-[#FFFDFB] px-3 py-2 text-left text-xs font-medium text-[#554438] hover:bg-[#F9EFE4] transition-colors"
               >
-                <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <Building2 className="h-3.5 w-3.5 shrink-0 text-[#9E8B7E]" />
                 <span className="flex-1 truncate">
                   {locations.find((l) => l.id === locationId)?.name ?? "Select branch"}
                 </span>
-                <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${branchOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-[#9E8B7E] transition-transform ${branchOpen ? "rotate-180" : ""}`} />
               </button>
 
               {branchOpen && (
-                <div className="absolute left-3 right-3 top-[calc(100%+4px)] z-50 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                <div className="absolute left-3 right-3 top-[calc(100%+4px)] z-50 overflow-hidden rounded-lg border border-[#E8D9CB] bg-[#FFFDFB] shadow-lg">
                   {locations.map((loc) => (
                     <button
                       key={loc.id}
                       type="button"
                       onClick={() => { setLocationId(loc.id); setBranchOpen(false); }}
-                      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs transition-colors hover:bg-slate-50 ${loc.id === locationId ? "font-semibold text-slate-900 bg-slate-50" : "text-slate-600"}`}
+                      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs transition-colors hover:bg-[#F9EFE4] ${loc.id === locationId ? "font-semibold text-[#8F4B30] bg-[#FBEAD9]" : "text-[#554438]"}`}
                     >
-                      <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      <Building2 className="h-3.5 w-3.5 shrink-0 text-[#9E8B7E]" />
                       <span className="truncate">{loc.name}</span>
                       {loc.id === locationId && (
-                        <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                        <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#C65B3B]" />
                       )}
                     </button>
                   ))}
@@ -320,11 +324,11 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
                 href={`/punch?loc=${locationId}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                className="flex w-full items-center gap-2 rounded-lg border border-[#E8D9CB] bg-[#FFFDFB] px-3 py-2 text-xs font-medium text-[#554438] hover:bg-[#F9EFE4] transition-colors"
               >
-                <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <Clock className="h-3.5 w-3.5 shrink-0 text-[#9E8B7E]" />
                 <span className="flex-1">{lang === "sv" ? "Web-punch" : "Web Punch"}</span>
-                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#9E8B7E]" />
               </a>
             </div>
           )}
@@ -332,19 +336,19 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
           {user && (
             <div className="app-panel-muted p-3">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EBDDCF] text-[#756458]">
                   <User className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-semibold text-slate-900">
+                  <div className="truncate text-xs font-semibold text-[#30251F]">
                     {(user.employeeId && employees.find(e => e.id === user.employeeId)?.name) || user.name}
                   </div>
-                  <div className="truncate text-xs text-slate-500">{user.role.replace(/_/g, " ")}</div>
+                  <div className="truncate text-xs text-[#756458]">{user.role.replace(/_/g, " ")}</div>
                 </div>
                 <button
                   type="button"
                   onClick={() => void signOut()}
-                  className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                  className="shrink-0 rounded-lg p-1.5 text-[#756458] hover:bg-[#EBDDCF] hover:text-[#30251F]"
                   aria-label="Sign out"
                   title="Sign out"
                 >
@@ -354,7 +358,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               {user.employeeId && (
                 <Link
                   href={`/employees/${user.employeeId}`}
-                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#E8D9CB] bg-[#FFFDFB] px-3 py-1.5 text-xs font-medium text-[#554438] hover:bg-[#F9EFE4]"
                 >
                   <User className="h-3.5 w-3.5" />
                   {lang === "sv" ? "Min profil" : "My Profile"}
@@ -370,19 +374,19 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <button
                   type="button"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:hidden"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#E8D9CB] bg-[#FFFDFB] text-[#554438] lg:hidden"
                   onClick={() => setMobileNavOpen((prev) => !prev)}
                   aria-label="Toggle navigation"
                 >
                   <Menu className="h-5 w-5" />
                 </button>
                 <div className="relative w-full max-w-xl">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9E8B7E]" />
                   <Input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={lang === "sv" ? "Sök uppgifter, personal, meddelanden..." : "Search tasks, staff, messages..."}
-                    className="h-11 border-slate-200 bg-white pl-9"
+                    className="h-11 border-[#E8D9CB] bg-[#FFFDFB] pl-9"
                   />
                   {deferredSearch && spotlightItems.length > 0 ? (
                     <div className="app-panel absolute left-0 right-0 top-[calc(100%+8px)] z-40 p-2">
@@ -398,7 +402,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
                               <div className="list-row-title">{item.label}</div>
                               <div className="list-row-copy">{item.description}</div>
                             </div>
-                            <ChevronRight className="h-4 w-4 text-slate-400" />
+                            <ChevronRight className="h-4 w-4 text-[#9E8B7E]" />
                           </Link>
                         ))}
                       </div>
@@ -418,13 +422,13 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
                 )}
                 <Button
                   variant="outline"
-                  className="h-10 rounded-xl border-slate-200 bg-white"
+                  className="h-10 rounded-xl border-[#E8D9CB] bg-[#FFFDFB] text-[#554438] hover:bg-[#F9EFE4]"
                   onClick={() => setLang(lang === "en" ? "sv" : "en")}
                 >
                   {lang === "en" ? "SV" : "EN"}
                 </Button>
                 {hasRole("admin", "super_admin") && (
-                  <Button asChild variant="outline" className="hidden h-10 rounded-xl border-slate-200 bg-white sm:inline-flex">
+                  <Button asChild variant="outline" className="hidden h-10 rounded-xl border-[#E8D9CB] bg-[#FFFDFB] text-[#554438] hover:bg-[#F9EFE4] sm:inline-flex">
                     <Link href="/settings">
                       <Settings className="h-4 w-4" />
                       {lang === "sv" ? "Inställningar" : "Settings"}
