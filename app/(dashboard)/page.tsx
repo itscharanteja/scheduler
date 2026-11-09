@@ -52,6 +52,11 @@ export default function DashboardPage() {
   const { employees: shellEmployees, unreadChatCount } = useShellData();
   const employeesCount = shellEmployees.length;
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const todayKey = new Date().toISOString().split("T")[0];
   const weekStart = useMemo(
     () => startOfWeek(new Date(`${todayKey}T00:00:00`), { weekStartsOn: 1 }),
@@ -90,150 +95,11 @@ export default function DashboardPage() {
     { locationId, userId: user?.id }
   );
 
-  const [todaySales, setTodaySales] = useState<SalesDay | null>(null);
-  const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
-  const [activity, setActivity] = useState<EmployeeActivityItem[]>([]);
+  const currentSales = initialSales[0] ?? null;
+  const currentAlerts = cachedAlerts;
+  const currentActivity = cachedActivity;
 
-  const currentSales = todaySales ?? initialSales[0] ?? null;
-  const currentAlerts = alerts.length > 0 ? alerts : cachedAlerts;
-  const currentActivity = activity.length > 0 ? activity : cachedActivity;
-
-  const loading = scheduleLoading && !scheduleData && weekShifts.length === 0;
-
-  // Connect to live simulation SSE stream for instant Sales Today updates
-  useEffect(() => {
-    let eventSource: EventSource | null = null;
-    try {
-      eventSource = new EventSource("/api/sim/stream");
-      eventSource.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          if (payload.type === "connected" && payload.data?.metrics) {
-            const m = payload.data.metrics;
-            const simDate = (payload.data.currentTime || todayKey).split("T")[0];
-            setTodaySales((prev) => ({
-              id: prev?.id || "sim-today",
-              date: simDate,
-              revenue: m.todayRevenue,
-              orders: m.todayOrders,
-              averageOrderValue: m.averageOrderValue,
-              laborCost: m.laborCost,
-              comparisonRevenue: prev?.comparisonRevenue || 49200,
-              peakLabel: m.peakLabel,
-              hourlyRevenue: m.hourlyRevenue,
-            }));
-          } else if (payload.type === "order" && payload.data) {
-            setTodaySales((prev) => {
-              const orderData = payload.data;
-              const newRev =
-                typeof orderData.todayRevenue === "number"
-                  ? orderData.todayRevenue
-                  : Math.round(((prev?.revenue || 0) + (orderData.amount || 0)) * 100) / 100;
-              const newOrders =
-                typeof orderData.todayOrders === "number"
-                  ? orderData.todayOrders
-                  : (prev?.orders || 0) + 1;
-              const peakLabel = orderData.peakLabel || prev?.peakLabel || "12:00–13:00";
-              const hourlyRevenue = orderData.hourlyRevenue || prev?.hourlyRevenue || [];
-
-              return {
-                id: prev?.id || "sim-today",
-                date: prev?.date || todayKey,
-                revenue: newRev,
-                orders: newOrders,
-                averageOrderValue: newOrders > 0 ? Math.round((newRev / newOrders) * 10) / 10 : 0,
-                laborCost: Math.round(newRev * 0.245 * 100) / 100,
-                comparisonRevenue: prev?.comparisonRevenue || 49200,
-                peakLabel,
-                hourlyRevenue,
-              };
-            });
-          } else if (payload.type === "clock" && payload.data?.metrics) {
-            const m = payload.data.metrics;
-            const simDate = (payload.data.currentTime || todayKey).split("T")[0];
-            setTodaySales((prev) => ({
-              id: prev?.id || "sim-today",
-              date: simDate,
-              revenue: m.todayRevenue,
-              orders: m.todayOrders,
-              averageOrderValue: m.averageOrderValue,
-              laborCost: m.laborCost,
-              comparisonRevenue: prev?.comparisonRevenue || 49200,
-              peakLabel: m.peakLabel,
-              hourlyRevenue: m.hourlyRevenue,
-            }));
-          } else if (payload.type === "simulation" && payload.data?.action === "reset") {
-            if (payload.data.metrics) {
-              const m = payload.data.metrics;
-              setTodaySales({
-                id: "sim-today",
-                date: todayKey,
-                revenue: m.todayRevenue,
-                orders: m.todayOrders,
-                averageOrderValue: m.averageOrderValue,
-                laborCost: m.laborCost,
-                comparisonRevenue: 49200,
-                peakLabel: m.peakLabel,
-                hourlyRevenue: m.hourlyRevenue,
-              });
-            } else {
-              getSales(locationId, 1).then((s) => setTodaySales(s[0] ?? null)).catch(() => {});
-            }
-          } else if (payload.type === "alert" && payload.data) {
-            setAlerts((prev) => [
-              {
-                id: payload.data.id || crypto.randomUUID(),
-                tone: payload.data.tone || "warning",
-                title: payload.data.title || "",
-                message: payload.data.message || "",
-              },
-              ...prev.slice(0, 5),
-            ]);
-          } else if (payload.type === "activity" && payload.data) {
-            setActivity((prev) => [
-              {
-                id: payload.data.id || crypto.randomUUID(),
-                employeeId: payload.data.employeeId || "",
-                type: (payload.data.type as any) || "shift",
-                title: payload.data.title || "",
-                detail: payload.data.detail || "",
-                timestamp: payload.data.timestamp || new Date().toISOString(),
-              },
-              ...prev.slice(0, 5),
-            ]);
-          }
-        } catch {}
-      };
-
-      eventSource.onerror = () => {
-        // Prevent aggressive reconnect loop in serverless production
-        eventSource?.close();
-      };
-    } catch {}
-
-    return () => {
-      eventSource?.close();
-    };
-  }, [todayKey, locationId]);
-
-  // Periodic background fallback to keep Sales Today perfectly synced
-  useEffect(() => {
-    const syncSales = async () => {
-      try {
-        const sales = await getSales(locationId, 1);
-        if (sales[0]) {
-          setTodaySales(sales[0]);
-        }
-      } catch {}
-    };
-
-    const interval = setInterval(syncSales, 8000);
-    window.addEventListener("focus", syncSales);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", syncSales);
-    };
-  }, [locationId]);
+  const loading = !mounted || (scheduleLoading && !scheduleData && weekShifts.length === 0);
 
   const todayShifts = useMemo(
     () => weekShifts.filter((shift) => shift.date === todayKey),
@@ -347,6 +213,31 @@ export default function DashboardPage() {
     },
   ];
 
+  // Hydration barrier: Render identical skeleton during SSR and first client hydration pass
+  if (!mounted) {
+    return (
+      <div className="space-y-6">
+        <section className="app-panel p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-2">
+              <GlassSkeleton className="h-6 w-48" />
+              <GlassSkeleton className="h-4 w-96 max-w-full" />
+            </div>
+            <div className="toolbar-row">
+              <GlassSkeleton className="h-10 w-28 rounded-xl" />
+              <GlassSkeleton className="h-10 w-28 rounded-xl" />
+            </div>
+          </div>
+        </section>
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <GlassSkeleton key={i} className="h-32 rounded-2xl" />
+          ))}
+        </section>
+      </div>
+    );
+  }
+
   // Simplified dashboard for basic user role
   if (isBasicUser) {
     const myShifts = weekShifts
@@ -419,12 +310,12 @@ export default function DashboardPage() {
               Array.from({ length: 3 }).map((_, i) => (
                 <GlassSkeleton key={i} className="h-12" />
               ))
-            ) : activity.length === 0 ? (
+            ) : currentActivity.length === 0 ? (
               <div className="px-4 py-6 text-center text-sm text-slate-500">
                 {lang === "sv" ? "Ingen aktivitet ännu." : "No activity yet."}
               </div>
             ) : (
-              activity.map((item) => (
+              currentActivity.map((item) => (
                 <div key={item.id} className="list-row">
                   <div className="list-row-main">
                     <div className="list-row-title">{item.title}</div>
