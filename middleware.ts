@@ -18,8 +18,17 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/auth/") || pathname === "/reset-password";
   // Kiosk page is intentionally public — it handles its own location scoping
   const isKiosk = pathname.startsWith("/punch");
+  const isPublicStatic =
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname.endsWith(".webmanifest") ||
+    pathname.endsWith(".png") ||
+    pathname.endsWith(".svg") ||
+    pathname.endsWith(".jpg") ||
+    pathname.endsWith(".ico");
   const isPublicRoute =
-    isLoginPage || isSignupPage || isWelcomePage || isAuthFlow || isKiosk;
+    isLoginPage || isSignupPage || isWelcomePage || isAuthFlow || isKiosk || isPublicStatic;
 
   // Inspect request cookies for existing Supabase auth tokens
   const allCookies = req.cookies.getAll();
@@ -90,6 +99,8 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Run on all routes except Next.js internals and static files
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/|images/).*)"],
+  // Run on all routes except Next.js internals, API routes, and static files
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|robots.txt|sitemap.xml|api/|images/).*)",
+  ],
 };

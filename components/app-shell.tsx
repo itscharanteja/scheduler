@@ -137,7 +137,7 @@ function getPageMeta(pathname: string, lang: "en" | "sv") {
 
 function ShellLayout({ children }: { children: React.ReactNode }) {
   const { lang, setLang } = useLanguage();
-  const { user, hasRole, signOut } = useAuth();
+  const { user, hasRole, signOut, loading: authLoading } = useAuth();
   const { locationId, locations, setLocationId } = useLocation();
   const isSuperAdmin = hasRole("super_admin");
   const pathname = usePathname();
@@ -146,6 +146,12 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
   const [search, setSearch] = useState("");
   const [branchOpen, setBranchOpen] = useState(false);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+
+  useEffect(() => {
+    if (!authLoading && !user && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      window.location.href = "/login";
+    }
+  }, [authLoading, user]);
 
   const { data: employees = [] } = useCachedQuery<Employee[]>(
     "employees",
