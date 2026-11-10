@@ -6,3 +6,4 @@ Index of technical design documents and RFCs.
 | :--- | :--- | :--- | :--- | :--- |
 | [Resilient Database Architecture](resilient-database-architecture.md) | 2026-11-09 | Charan Sri Teja | Approved | Resilient multi-tier database access, edge middleware fast-fail, branch-partitioned SWR caching, and degraded mode reconnection banner. |
 | [Instant Navigation Responsiveness](instant-navigation-responsiveness.md) | 2026-11-09 | Charan Sri Teja | Approved | Instant single-frame navigation feedback, zero-dependency 80ms progress bar, 2-tier prefetching, and code-split Suspense skeletons. |
+| [Distributed Latency Resolution & AWS Migration](distributed-latency-resolution-and-aws-migration.md) | 2026-11-10 | Charan Sri Teja | Approved | Two-phase architecture achieving <=1.0s LCP across Sweden and India: zero-network middleware JWT checks, single-flight server aggregation, SWR pre-hydration, and AWS App Runner + RDS blueprint. |
