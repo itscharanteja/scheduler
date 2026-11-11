@@ -1,8 +1,9 @@
-import { createServerClient } from "@supabase/auth-helpers-nextjs";
 import { NextRequest, NextResponse } from "next/server";
+import { extractAccessToken, verifyAccessToken } from "@/lib/auth/jwt-verify";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const jwtSecret = process.env.SUPABASE_JWT_SECRET;
 
 export async function middleware(req: NextRequest) {
   // Skip auth when Supabase is not configured (local dev without .env.local)
@@ -30,72 +31,43 @@ export async function middleware(req: NextRequest) {
   const isPublicRoute =
     isLoginPage || isSignupPage || isWelcomePage || isAuthFlow || isKiosk || isPublicStatic;
 
-  // Inspect request cookies for existing Supabase auth tokens
-  const allCookies = req.cookies.getAll();
-  const hasAuthToken = allCookies.some(
-    (c) =>
-      c.name.includes("-auth-token") ||
-      (c.name.startsWith("sb-") && c.name.includes("token")) ||
-      c.name === "sb-access-token"
-  );
+  // Extract access token locally from request cookies with zero network overhead
+  const token = extractAccessToken(req.cookies);
 
-  // If unauthenticated and accessing a protected route, fast-fail redirect immediately without remote query
-  if (!hasAuthToken && !isPublicRoute) {
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
-
-  // If unauthenticated on a public route, allow immediately
-  if (!hasAuthToken) {
+  // If no token exists
+  if (!token) {
+    if (!isPublicRoute) {
+      return NextResponse.redirect(new URL("/login", req.url));
+    }
     return NextResponse.next();
   }
 
-  let res = NextResponse.next({ request: { headers: req.headers } });
+  // Cryptographically verify token and expiration locally via Web Crypto (< 2ms)
+  const { valid, needsRefresh } = await verifyAccessToken(token, jwtSecret);
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return req.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
-        res = NextResponse.next({ request: { headers: req.headers } });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          res.cookies.set(name, value, options as any),
-        );
-      },
-    },
-    global: {
-      fetch: (url, opts) =>
-        fetch(url, { ...opts, signal: AbortSignal.timeout(1500) }),
-    },
-  });
-
-  // Query session with timeout guard. If remote Supabase is sleeping, fail open to client shell
-  let session = null;
-  try {
-    const {
-      data: { session: currentSession },
-    } = await supabase.auth.getSession();
-    session = currentSession;
-  } catch (err) {
-    console.warn(
-      `[middleware] Supabase getSession timed out or failed on ${pathname}:`,
-      err
-    );
-    // Request holds a session cookie: fail open to client shell where JWT claims are verified locally
-    return res;
+  if (!valid) {
+    if (!isPublicRoute) {
+      return NextResponse.redirect(new URL("/login", req.url));
+    }
+    return NextResponse.next();
   }
 
-  if (!session && !isPublicRoute) {
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
-
-  if (session && (isLoginPage || isSignupPage)) {
+  // Authenticated user attempting to visit login/signup -> redirect to dashboard
+  if (isLoginPage || isSignupPage) {
     return NextResponse.redirect(new URL("/", req.url));
   }
 
-  return res;
+  // Valid session on protected or public route -> forward with 0 network calls
+  const requestHeaders = new Headers(req.headers);
+  if (needsRefresh) {
+    requestHeaders.set("x-token-refresh-needed", "1");
+  }
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 }
 
 export const config = {

@@ -15,10 +15,10 @@ const MAX_CACHE_BYTES = 3 * 1024 * 1024; // 3MB limit
 const TARGET_EVICT_BYTES = 2.5 * 1024 * 1024; // Evict down to 2.5MB
 
 // In-memory snapshot map to guarantee referential stability for useSyncExternalStore
-const memoryCache = new Map<string, CacheEntry<unknown>>();
+export const memoryCache = new Map<string, CacheEntry<unknown>>();
 const listenersByKey = new Map<string, Set<() => void>>();
 const inFlightQueries = new Map<string, Promise<unknown>>();
-const lastFetchTimeByKey = new Map<string, number>();
+export const lastFetchTimeByKey = new Map<string, number>();
 const revalidateListeners = new Set<() => void>();
 
 function subscribeKey(storageKey: string, listener: () => void): () => void {
@@ -180,6 +180,36 @@ export function setCacheEntry<T>(
   notifyKey(storageKey);
 }
 
+/** Pre-hydrate the client memory cache with server snapshot data */
+export function hydrateCache(
+  entries: Record<string, unknown>,
+  meta?: { locationId?: string; userId?: string }
+): void {
+  const now = Date.now();
+  const safeLoc = meta?.locationId || "global";
+  const userIds = [meta?.userId || "anonymous"];
+  // If a specific userId was passed, also seed "anonymous" so initial render before auth resolution hits cache
+  if (meta?.userId && meta.userId !== "anonymous") {
+    userIds.push("anonymous");
+  }
+
+  Object.entries(entries).forEach(([entityKey, data]) => {
+    if (data === undefined) return;
+    for (const uid of userIds) {
+      const storageKey = buildCacheKey(uid, safeLoc, entityKey);
+      const entry: CacheEntry<unknown> = {
+        data,
+        timestamp: now,
+        locationId: safeLoc,
+        userId: uid,
+        version: CACHE_VERSION,
+      };
+      setCacheEntry(storageKey, entry);
+      lastFetchTimeByKey.set(storageKey, now);
+    }
+  });
+}
+
 /** Clear all cached records belonging to a user upon logout */
 export function clearUserCache(userId: string): void {
   if (!userId) return;
@@ -219,6 +249,7 @@ export interface UseCachedQueryOptions {
   ttlMs?: number; // Default 10 minutes
   timeoutMs?: number; // Default 3,500ms
   isEditing?: boolean; // Fencing: prevents view overwrite when editing
+  revalidateOnMount?: boolean; // Fencing: set false to skip initial mount query if primed
 }
 
 export interface UseCachedQueryResult<T> {
@@ -243,6 +274,7 @@ export function useCachedQuery<T>(
     userId = "anonymous",
     timeoutMs = 3500,
     isEditing = false,
+    revalidateOnMount,
   } = options;
 
   const storageKey = buildCacheKey(userId, locationId, key);
@@ -263,7 +295,10 @@ export function useCachedQuery<T>(
   const userIdRef = useRef(userId);
   userIdRef.current = userId;
 
-  const [isHydrated, setIsHydrated] = useState(false);
+  // Initialize as hydrated synchronously if entry already exists in memory cache
+  const [isHydrated, setIsHydrated] = useState(() => {
+    return memoryCache.has(storageKey);
+  });
 
   useEffect(() => {
     setIsHydrated(true);
@@ -302,10 +337,10 @@ export function useCachedQuery<T>(
 
   const executeFetch = useCallback(
     async (signal?: AbortSignal, force = false): Promise<void> => {
-      // Avoid rapid refetching if fetched recently (< 1.5s) unless force is true
+      // Avoid rapid refetching if fetched recently (< 60s) unless force is true
       const now = Date.now();
       const lastFetch = lastFetchTimeByKey.get(storageKey) ?? 0;
-      if (!force && now - lastFetch < 1500) {
+      if (!force && lastFetch > 0 && now - lastFetch < 60000) {
         return;
       }
 
@@ -391,8 +426,15 @@ export function useCachedQuery<T>(
 
   // Execute on mount or when storageKey changes
   useEffect(() => {
-    const controller = new AbortController();
-    void executeFetch(controller.signal);
+    const now = Date.now();
+    const lastFetch = lastFetchTimeByKey.get(storageKey) ?? 0;
+    const isFresh = lastFetch > 0 && now - lastFetch < 60000;
+
+    let controller: AbortController | null = null;
+    if (revalidateOnMount !== false && !isFresh) {
+      controller = new AbortController();
+      void executeFetch(controller.signal);
+    }
 
     const onRevalidate = () => {
       void executeFetch(undefined, true);
@@ -400,10 +442,12 @@ export function useCachedQuery<T>(
     revalidateListeners.add(onRevalidate);
 
     return () => {
-      controller.abort();
+      if (controller) {
+        controller.abort();
+      }
       revalidateListeners.delete(onRevalidate);
     };
-  }, [storageKey, executeFetch]);
+  }, [storageKey, executeFetch, revalidateOnMount]);
 
   const forceRefetch = useCallback(() => executeFetch(undefined, true), [executeFetch]);
 
