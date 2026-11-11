@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS weather_cache (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   location_id           uuid NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
   forecast_date         date NOT NULL,
-  day                   text NOT NULL,
   temperature_high      numeric(5,2) NOT NULL,
   temperature_low       numeric(5,2) NOT NULL,
   condition             text NOT NULL,
