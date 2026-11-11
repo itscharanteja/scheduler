@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -11,7 +10,6 @@ import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
   const { signIn } = useAuth();
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,7 +50,7 @@ export default function LoginPage() {
         toast.error(error);
         return;
       }
-      router.push("/");
+      window.location.href = "/";
     } catch (err) {
       toast.error("An unexpected error occurred. Check the console.");
       console.error("[login]", err);

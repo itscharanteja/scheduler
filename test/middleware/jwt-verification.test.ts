@@ -89,6 +89,21 @@ test("verifyAccessToken validates signature using HMAC-SHA256", async () => {
   assert.strictEqual(result.needsRefresh, false);
 });
 
+test("verifyAccessToken validates signature with 64-byte Base64-encoded Supabase secret", async () => {
+  const rawBytes = new Uint8Array(64);
+  for (let i = 0; i < 64; i++) rawBytes[i] = (i * 7) % 256;
+  const b64Secret = Buffer.from(rawBytes).toString("base64");
+
+  const token = await new SignJWT({ sub: "supabase-user-789" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setExpirationTime("1h")
+    .sign(rawBytes);
+
+  const result = await verifyAccessToken(token, b64Secret);
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.userId, "supabase-user-789");
+});
+
 test("verifyAccessToken rejects invalid / tampered signature", async () => {
   const secretKey = new TextEncoder().encode(TEST_SECRET);
   const token = await new SignJWT({ sub: "user-abc-123" })
