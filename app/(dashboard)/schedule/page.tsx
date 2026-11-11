@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DashboardSkeleton } from "@/components/dashboard-skeleton";
+import { AiSuggestionRow } from "./ai-suggestion-row";
 import { ShiftPopover, type ShiftForm } from "./shift-popover";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
@@ -31,8 +32,10 @@ import {
   getShiftsByWeek,
   updateShift,
 } from "@/lib/supabase";
-import type { Employee, Shift, WeatherForecast } from "@/lib/types";
+import type { Employee, Shift } from "@/lib/types";
 import type { AttendanceSessionWithEmployee } from "@/lib/supabase/attendance";
+
+const NO_SHIFTS: Shift[] = [];
 
 const GanttScheduleCanvas = dynamic(
   () => import("./gantt-schedule-canvas"),
@@ -84,54 +87,6 @@ function avatarColor(name: string): string {
 
 function initials(name: string): string {
   return name.trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-}
-
-// ─── AI suggestion inline row ─────────────────────────────────────────────────
-
-function AiSuggestionRow({ weather, label }: { weather: WeatherForecast[]; label: string }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
-      {/* Toggle button */}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-slate-100"
-      >
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-3.5 w-3.5 text-blue-500" />
-          <span className="text-[13px] font-semibold text-slate-700">{label}</span>
-          <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-600">
-            {weather.length}
-          </span>
-        </div>
-        <ChevronRight
-          className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200"
-          style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
-        />
-      </button>
-
-      {/* Expanded content */}
-      {open && (
-        <div className="border-t border-slate-200 divide-y divide-slate-100">
-          {weather.map((day) => (
-            <div key={day.forecastDate} className="flex items-center justify-between gap-3 px-4 py-2.5">
-              <div className="min-w-0">
-                <div className="text-[13px] font-semibold text-slate-800">
-                  {day.day} — {day.forecastDate}
-                </div>
-                <div className="mt-0.5 text-[12px] text-slate-500">{day.staffingSuggestion}</div>
-              </div>
-              <span className="shrink-0 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-                {day.temperatureHigh}°
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 // ─── Filter popover ──────────────────────────────────────────────────────────
@@ -293,6 +248,7 @@ function SchedulePageContent() {
   const {
     data: scheduleData,
     isLoading: scheduleLoading,
+    lastSync: scheduleSync,
     hasStagedUpdate,
     applyStagedUpdate,
     refetch: refetchShifts,
@@ -306,14 +262,21 @@ function SchedulePageContent() {
     }
   );
 
-  const [localShifts, setLocalShifts] = useState<Shift[] | null>(null);
-  const shifts = localShifts ?? scheduleData?.shifts ?? [];
+  const scheduleKey = `${locationId}:${weekStartStr}`;
+  const scopedSchedule = scheduleData?.locationId === locationId && scheduleData.weekStart === weekStartStr
+    ? scheduleData
+    : undefined;
+  const [localSchedule, setLocalSchedule] = useState<{
+    key: string;
+    base: typeof scopedSchedule;
+    shifts: Shift[];
+  }>();
+  const shifts = localSchedule?.key === scheduleKey && localSchedule.base === scopedSchedule
+    ? localSchedule.shifts
+    : scopedSchedule?.shifts ?? NO_SHIFTS;
 
-  useEffect(() => {
-    setLocalShifts(null);
-  }, [scheduleData]);
-
-  const [weather, setWeather] = useState<WeatherForecast[]>([]);
+  const [pendingShiftWrites, setPendingShiftWrites] = useState(0);
+  const [rosterVersion, setRosterVersion] = useState(0);
 
   // Filter state
   const [filterEmployeeIds, setFilterEmployeeIds] = useState<Set<string>>(new Set());
@@ -341,21 +304,8 @@ function SchedulePageContent() {
   }
 
   const t = lang === "sv"
-    ? { addShift: "Lägg till pass", save: "Spara pass", delete: "Ta bort pass", hours: "Planerade timmar", conflicts: "Konflikter", gaps: "Bemanningsluckor", week: "Vecka", ai: "AI-förslag", noShifts: "Inga pass planerade." }
-    : { addShift: "Add shift", save: "Save shift", delete: "Delete shift", hours: "Planned hours", conflicts: "Conflicts", gaps: "Coverage gaps", week: "Week", ai: "AI suggestion", noShifts: "No shifts planned." };
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const weatherRes = await fetch(`/api/weather?locationId=${locationId}`).then((r) => r.json()).catch(() => ({ forecasts: [] }));
-        if (active) {
-          setWeather(Array.isArray(weatherRes.forecasts) ? weatherRes.forecasts.slice(0, 3) : []);
-        }
-      } catch {}
-    })();
-    return () => { active = false; };
-  }, [locationId]);
+    ? { addShift: "Lägg till pass", save: "Spara pass", delete: "Ta bort pass", hours: "Planerade timmar", conflicts: "Konflikter", gaps: "Bemanningsluckor", week: "Vecka", noShifts: "Inga pass planerade." }
+    : { addShift: "Add shift", save: "Save shift", delete: "Delete shift", hours: "Planned hours", conflicts: "Conflicts", gaps: "Coverage gaps", week: "Week", noShifts: "No shifts planned." };
 
   // Attendance state
   const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSessionWithEmployee[]>([]);
@@ -398,7 +348,7 @@ function SchedulePageContent() {
     return map;
   }, [shifts]);
 
-  const selectedDayShifts = shiftsByDay.get(selectedDay) ?? [];
+  const selectedDayShifts = shiftsByDay.get(selectedDay) ?? NO_SHIFTS;
   const totalHours = shifts.reduce((sum, s) => sum + shiftHours(s.startTime, s.endTime), 0);
 
   const dayConflicts = useMemo(() => {
@@ -424,40 +374,54 @@ function SchedulePageContent() {
     router.push(`/schedule?${params.toString()}`);
   }
 
-  async function handleCreate(form: ShiftForm) {
-    const emp = employees.find((e) => e.id === form.employeeId);
-    const created = await createShift({
-      employeeId: form.employeeId,
-      date: form.date,
-      startTime: form.startTime,
-      endTime: form.endTime,
-      role: form.role,
-      locationId: emp?.locationId ?? locationId,
-      status: "draft",
-    });
-    setLocalShifts([...shifts, created]);
-    toast.success(lang === "sv" ? "Pass tillagt" : "Shift added");
-    void refetchShifts();
+  async function saveRosterChange(
+    write: () => Promise<(current: Shift[]) => Shift[]>,
+    message: string,
+  ) {
+    setPendingShiftWrites((count) => count + 1);
+    setRosterVersion((version) => version + 1);
+    try {
+      const apply = await write();
+      setLocalSchedule((current) => ({
+        key: scheduleKey,
+        base: scopedSchedule,
+        shifts: apply(current?.key === scheduleKey && current.base === scopedSchedule ? current.shifts : shifts),
+      }));
+      toast.success(message);
+      void refetchShifts();
+    } finally {
+      setPendingShiftWrites((count) => count - 1);
+    }
   }
 
-  async function handleUpdate(shiftId: string, form: ShiftForm) {
-    const updated = await updateShift(shiftId, {
-      employeeId: form.employeeId,
-      date: form.date,
-      startTime: form.startTime,
-      endTime: form.endTime,
-      role: form.role,
-    });
-    setLocalShifts(shifts.map((s) => (s.id === shiftId ? updated : s)));
-    toast.success(lang === "sv" ? "Pass uppdaterat" : "Shift updated");
-    void refetchShifts();
+  function handleCreate(form: ShiftForm) {
+    return saveRosterChange(async () => {
+      const emp = employees.find((employee) => employee.id === form.employeeId);
+      const created = await createShift({
+        employeeId: form.employeeId,
+        date: form.date,
+        startTime: form.startTime,
+        endTime: form.endTime,
+        role: form.role,
+        locationId: emp?.locationId ?? locationId,
+        status: "draft",
+      });
+      return (current) => [...current, created];
+    }, lang === "sv" ? "Pass tillagt" : "Shift added");
   }
 
-  async function handleDelete(shiftId: string) {
-    await deleteShift(shiftId);
-    setLocalShifts(shifts.filter((s) => s.id !== shiftId));
-    toast.success(lang === "sv" ? "Pass borttaget" : "Shift deleted");
-    void refetchShifts();
+  function handleUpdate(shiftId: string, form: ShiftForm) {
+    return saveRosterChange(async () => {
+      const updated = await updateShift(shiftId, form);
+      return (current) => current.map((shift) => shift.id === shiftId ? updated : shift);
+    }, lang === "sv" ? "Pass uppdaterat" : "Shift updated");
+  }
+
+  function handleDelete(shiftId: string) {
+    return saveRosterChange(async () => {
+      await deleteShift(shiftId);
+      return (current) => current.filter((shift) => shift.id !== shiftId);
+    }, lang === "sv" ? "Pass borttaget" : "Shift deleted");
   }
 
   // Base list: employees who have at least one shift this week
@@ -610,7 +574,17 @@ function SchedulePageContent() {
         )}
 
         {/* AI suggestion — collapsed by default, expands inline */}
-        {canEdit && weather.length > 0 && <AiSuggestionRow weather={weather} label={t.ai} />}
+        {canEdit && (
+          <AiSuggestionRow
+            date={selectedDay}
+            locationId={user?.role === "admin" ? user.locationId ?? "" : locationId}
+            lang={lang}
+            saving={pendingShiftWrites > 0}
+            rosterVersion={rosterVersion}
+            scheduleSync={scheduleSync}
+            userId={user?.id}
+          />
+        )}
       </div>
 
       {/* ── Day panel: Schedule + Attendance tabs ── */}

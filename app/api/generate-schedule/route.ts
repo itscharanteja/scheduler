@@ -6,6 +6,7 @@ import {
   anonymiseShifts,
   deAnonymiseResponse,
 } from "@/lib/gdpr";
+import { fetchAnthropicMessage, SCHEDULING_MODEL } from "@/lib/server/anthropic";
 import { validateSchedule } from "@/lib/labour-law";
 
 type EmployeeInput = {
@@ -228,29 +229,21 @@ Use this weather data to adjust staffing recommendations. On sunny weekends add 
       existingShifts: anonShifts,
     };
 
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-5",
-        max_tokens: 4096,
-        thinking: { type: "adaptive" },
-        output_config: { effort: "low" },
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: JSON.stringify({
-              ...userPayload,
-              weatherContext: weatherContext || "",
-            }),
-          },
-        ],
-      }),
+    const anthropicRes = await fetchAnthropicMessage(apiKey, {
+      model: SCHEDULING_MODEL,
+      max_tokens: 4096,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "low" },
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: JSON.stringify({
+            ...userPayload,
+            weatherContext: weatherContext || "",
+          }),
+        },
+      ],
     });
 
     if (!anthropicRes.ok) {

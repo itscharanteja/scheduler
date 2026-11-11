@@ -38,6 +38,16 @@ export function serviceClient() {
   return createClient(SUPABASE_URL, SERVICE_KEY);
 }
 
+export function requestClient(req: NextRequest) {
+  if (!SUPABASE_URL || !SUPABASE_ANON) return null;
+  return createServerClient(SUPABASE_URL, SUPABASE_ANON, {
+    cookies: {
+      getAll() { return req.cookies.getAll(); },
+      setAll() { /* read-only in route handlers */ },
+    },
+  });
+}
+
 /**
  * Verify the session cookie in the request and return the caller's identity + role.
  *
@@ -47,14 +57,8 @@ export function serviceClient() {
  * - No user_profiles row found for the user
  */
 export async function getCallerSession(req: NextRequest): Promise<CallerSession | null> {
-  if (!SUPABASE_URL || !SUPABASE_ANON || !SERVICE_KEY) return null;
-
-  const userClient = createServerClient(SUPABASE_URL, SUPABASE_ANON, {
-    cookies: {
-      getAll() { return req.cookies.getAll(); },
-      setAll() { /* read-only in route handlers */ },
-    },
-  });
+  const userClient = requestClient(req);
+  if (!userClient || !SERVICE_KEY) return null;
 
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return null;

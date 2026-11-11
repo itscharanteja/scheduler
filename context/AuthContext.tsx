@@ -19,6 +19,7 @@ export interface AuthUser {
   role: UserRole;
   name: string;
   employeeId: string | null;
+  locationId: string | null;
 }
 
 interface AuthContextValue {
@@ -40,13 +41,14 @@ async function fetchProfile(
   if (!supabaseClient) return null;
   const { data, error } = await supabaseClient
     .from("user_profiles")
-    .select("role, full_name, email, employee_id, employees(name)")
+    .select("role, full_name, email, employee_id, employees(name, location_id)")
     .eq("id", userId)
     .single();
   if (error || !data) return null;
   // Prefer the linked employee's name; fall back to full_name; never show email as a name
   const empRel = data.employees;
-  const employeeName = (Array.isArray(empRel) ? empRel[0]?.name : (empRel as { name: string } | null)?.name) ?? null;
+  const employee = Array.isArray(empRel) ? empRel[0] : empRel as { name: string; location_id: string | null } | null;
+  const employeeName = employee?.name ?? null;
   const displayName = employeeName ?? (data.full_name as string | null) ?? null;
   return {
     id: userId,
@@ -54,6 +56,7 @@ async function fetchProfile(
     role: (data.role as UserRole) ?? "user",
     name: displayName ?? email,
     employeeId: (data.employee_id as string | null) ?? null,
+    locationId: employee?.location_id ?? null,
   };
 }
 

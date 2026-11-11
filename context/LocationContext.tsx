@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useAuth } from "./AuthContext";
 import { getLocations } from "@/lib/supabase";
 import { LOCATION_ID } from "@/lib/constants";
 import type { Location } from "@/lib/types";
@@ -29,8 +30,10 @@ export function LocationProvider({
   children: ReactNode;
   isSuperAdmin: boolean;
 }) {
+  const { user } = useAuth();
   const [locations, setLocations] = useState<Location[]>([]);
-  const [locationId, setLocationIdState] = useState<string>(LOCATION_ID);
+  const [selectedLocationId, setLocationIdState] = useState<string>(LOCATION_ID);
+  const locationId = isSuperAdmin ? selectedLocationId : user?.locationId ?? LOCATION_ID;
 
   useEffect(() => {
     if (!isSuperAdmin) return;

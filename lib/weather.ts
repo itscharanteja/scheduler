@@ -1,4 +1,4 @@
-import type { WeatherForecast, WeatherCondition, WeatherSuggestion } from "./types";
+import type { WeatherForecast, WeatherCondition } from "./types";
 
 const GOTHENBURG_LAT = 57.7089;
 const GOTHENBURG_LON = 11.9746;
@@ -376,4 +376,74 @@ export function getMockWeather(): Omit<
   });
 
   return generateWeatherSuggestions(forecasts);
+}
+
+export type VerifiedForecastLocation = {
+  latitude: number;
+  longitude: number;
+  timeZone: string;
+};
+
+export type SelectedDayForecast = {
+  provider: "openweather";
+  date: string;
+  fetchedAt: string;
+  expiresAt: string;
+  entries: { time: string; condition: string; daylight: boolean }[];
+};
+
+export class ForecastLookupError extends Error {
+  readonly retryable: boolean;
+
+  constructor(retryable: boolean) {
+    super("Forecast unavailable");
+    this.retryable = retryable;
+  }
+}
+
+/** Separate from the shared weather cache, which can include projected or sample days. */
+export async function fetchSelectedDayForecast(
+  date: string,
+  location: VerifiedForecastLocation,
+  fetcher: typeof fetch = fetch,
+  now = new Date(),
+): Promise<SelectedDayForecast | null> {
+  const localDate = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: location.timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const today = localDate.format(now);
+  const lastPossibleDate = localDate.format(new Date(now.getTime() + 5 * 86_400_000));
+  if (date < today || date > lastPossibleDate) return null;
+
+  const apiKey = process.env.OPENWEATHER_API_KEY?.trim();
+  if (!apiKey) throw new ForecastLookupError(false);
+  const url = new URL("https://api.openweathermap.org/data/2.5/forecast");
+  url.search = new URLSearchParams({
+    lat: String(location.latitude), lon: String(location.longitude), appid: apiKey, units: "metric",
+  }).toString();
+
+  const response = await fetcher(url, { cache: "no-store", signal: AbortSignal.timeout(5000) });
+  if (!response.ok) throw new ForecastLookupError(response.status === 429 || response.status >= 500);
+  const body = await response.json() as {
+    list?: { dt?: number; weather?: { main?: string }[]; sys?: { pod?: string } }[];
+  };
+  if (!Array.isArray(body?.list) || body.list.length === 0) throw new ForecastLookupError(true);
+
+  const entries: SelectedDayForecast["entries"] = [];
+  for (const entry of body.list) {
+    const timestamp = (entry?.dt ?? NaN) * 1000;
+    const condition = entry?.weather?.[0]?.main;
+    if (!Number.isInteger(timestamp) || typeof condition !== "string" || !condition.trim() ||
+      timestamp < now.getTime() || timestamp > now.getTime() + 5 * 86_400_000 || localDate.format(timestamp) !== date) continue;
+    entries.push({ time: new Date(timestamp).toISOString(), condition, daylight: entry.sys?.pod === "d" });
+  }
+  if (!entries.length) return null;
+  const lastEntry = Math.max(...entries.map(({ time }) => Date.parse(time)));
+  return {
+    provider: "openweather",
+    date,
+    fetchedAt: now.toISOString(),
+    expiresAt: new Date(Math.min(now.getTime() + 30 * 60_000, lastEntry)).toISOString(),
+    entries,
+  };
 }
