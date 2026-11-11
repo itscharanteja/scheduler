@@ -104,6 +104,19 @@ test("verifyAccessToken validates signature with 64-byte Base64-encoded Supabase
   assert.strictEqual(result.userId, "supabase-user-789");
 });
 
+test("verifyAccessToken validates ES256 asymmetric token in development fallback", async () => {
+  const { generateKeyPair } = await import("jose");
+  const { privateKey } = await generateKeyPair("ES256");
+  const token = await new SignJWT({ sub: "es256-user-456" })
+    .setProtectedHeader({ alg: "ES256" })
+    .setExpirationTime("1h")
+    .sign(privateKey);
+
+  const result = await verifyAccessToken(token);
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.userId, "es256-user-456");
+});
+
 test("verifyAccessToken rejects invalid / tampered signature", async () => {
   const secretKey = new TextEncoder().encode(TEST_SECRET);
   const token = await new SignJWT({ sub: "user-abc-123" })

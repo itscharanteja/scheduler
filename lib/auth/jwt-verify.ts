@@ -1,4 +1,9 @@
-import { decodeJwt, jwtVerify } from "jose";
+import {
+  createRemoteJWKSet,
+  decodeJwt,
+  decodeProtectedHeader,
+  jwtVerify,
+} from "jose";
 
 export interface TokenVerificationResult {
   valid: boolean;
@@ -10,6 +15,21 @@ export interface TokenVerificationResult {
 export interface CookieReader {
   getAll: () => { name: string; value: string }[];
   get: (name: string) => { value: string } | undefined;
+}
+
+let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+
+function getJWKS() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  if (!jwks && supabaseUrl) {
+    try {
+      const jwksUrl = new URL("/auth/v1/.well-known/jwks.json", supabaseUrl);
+      jwks = createRemoteJWKSet(jwksUrl);
+    } catch (e) {
+      console.warn("[jwt-verify] Failed to initialize JWKS endpoint:", e);
+    }
+  }
+  return jwks;
 }
 
 /**
@@ -52,7 +72,8 @@ export function getSecretBytesCandidates(secret: string): Uint8Array[] {
 }
 
 /**
- * Extract access token from Supabase cookies (including chunked cookies)
+ * Extract access token from Supabase cookies (including chunked cookies).
+ * Selects the freshest (highest exp) access token if multiple cookies exist.
  */
 export function extractAccessToken(cookies: CookieReader): string | null {
   // 1. Direct sb-access-token cookie
@@ -62,9 +83,22 @@ export function extractAccessToken(cookies: CookieReader): string | null {
   }
 
   const allCookies = cookies.getAll();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let projectRef = "";
+  try {
+    if (supabaseUrl) {
+      projectRef = new URL(supabaseUrl).hostname.split(".")[0];
+    }
+  } catch {
+    // ignore
+  }
 
   // Find cookie names matching auth-token pattern
   const authBases = new Set<string>();
+  if (projectRef) {
+    authBases.add(`sb-${projectRef}-auth-token`);
+  }
+
   for (const c of allCookies) {
     if (
       c.name.includes("-auth-token") ||
@@ -74,6 +108,8 @@ export function extractAccessToken(cookies: CookieReader): string | null {
       authBases.add(base);
     }
   }
+
+  const tokens: string[] = [];
 
   for (const base of authBases) {
     let raw = cookies.get(base)?.value;
@@ -111,25 +147,44 @@ export function extractAccessToken(cookies: CookieReader): string | null {
 
         const parsed = JSON.parse(decoded);
         if (Array.isArray(parsed) && typeof parsed[0] === "string") {
-          return parsed[0];
-        }
-        if (parsed && typeof parsed.access_token === "string") {
-          return parsed.access_token;
+          tokens.push(parsed[0]);
+        } else if (parsed && typeof parsed.access_token === "string") {
+          tokens.push(parsed.access_token);
         }
       } catch {
-        // Fallback: raw JWT if string has 3 dot-separated parts
         if (raw.split(".").length === 3) {
-          return raw;
+          tokens.push(raw);
         }
       }
     }
   }
 
-  return null;
+  if (tokens.length === 0) return null;
+
+  // Pick the token with the highest exp claim (the newest token)
+  let bestToken: string | null = null;
+  let maxExp = 0;
+
+  for (const t of tokens) {
+    try {
+      const payload = decodeJwt(t);
+      const exp = payload.exp ?? 0;
+      if (exp > maxExp) {
+        maxExp = exp;
+        bestToken = t;
+      }
+    } catch {
+      if (!bestToken) bestToken = t;
+    }
+  }
+
+  return bestToken || tokens[0] || null;
 }
 
 /**
- * Verify JWT signature and expiration locally with zero network calls
+ * Verify JWT signature and expiration locally with zero network calls.
+ * Automatically handles asymmetric ES256/RS256 (via cached Supabase JWKS)
+ * and symmetric HMAC HS256/HS384/HS512.
  */
 export async function verifyAccessToken(
   token: string,
@@ -137,47 +192,51 @@ export async function verifyAccessToken(
 ): Promise<TokenVerificationResult> {
   const nowInSeconds = Math.floor(Date.now() / 1000);
 
-  if (secret) {
-    const candidates = getSecretBytesCandidates(secret);
-    let verifiedPayload: ReturnType<typeof decodeJwt> | null = null;
-    let lastError: unknown = null;
+  // 1. Inspect protected header to detect algorithm (ES256, RS256, HS256, etc.)
+  let alg = "HS256";
+  try {
+    const header = decodeProtectedHeader(token);
+    if (header.alg) alg = header.alg;
+  } catch {
+    // default to HS256
+  }
 
+  // 2. If asymmetric (ES256 / RS256) used by Supabase Auth:
+  if (alg === "ES256" || alg === "RS256") {
+    const remoteJwks = getJWKS();
+    if (remoteJwks) {
+      try {
+        const { payload } = await jwtVerify(token, remoteJwks, {
+          algorithms: [alg],
+        });
+        const exp = payload.exp ?? 0;
+        if (exp <= nowInSeconds) {
+          return { valid: false, needsRefresh: false, expiresAt: exp };
+        }
+        const needsRefresh = exp - nowInSeconds < 120;
+        return {
+          valid: true,
+          needsRefresh,
+          userId: typeof payload.sub === "string" ? payload.sub : undefined,
+          expiresAt: exp,
+        };
+      } catch (err) {
+        console.warn(
+          "[jwt-verify] Asymmetric verification error:",
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+    }
+  }
+
+  // 3. If symmetric HMAC (HS256, HS384, HS512) and secret provided:
+  if (secret && alg.startsWith("HS")) {
+    const candidates = getSecretBytesCandidates(secret);
     for (const keyBytes of candidates) {
       try {
         const { payload } = await jwtVerify(token, keyBytes, {
-          algorithms: ["HS256"],
+          algorithms: ["HS256", "HS384", "HS512"],
         });
-        verifiedPayload = payload;
-        break;
-      } catch (err) {
-        lastError = err;
-      }
-    }
-
-    if (verifiedPayload) {
-      const exp = verifiedPayload.exp ?? 0;
-      if (exp <= nowInSeconds) {
-        return { valid: false, needsRefresh: false, expiresAt: exp };
-      }
-
-      // Sliding-window refresh: < 2 minutes remaining
-      const needsRefresh = exp - nowInSeconds < 120;
-      return {
-        valid: true,
-        needsRefresh,
-        userId: typeof verifiedPayload.sub === "string" ? verifiedPayload.sub : undefined,
-        expiresAt: exp,
-      };
-    }
-
-    // In development mode: if signature check fails (e.g. wrong key in local .env), log warning and decode payload
-    if (process.env.NODE_ENV === "development") {
-      try {
-        const payload = decodeJwt(token);
-        console.warn(
-          "[jwt-verify] Signature mismatch with SUPABASE_JWT_SECRET. Falling back to unverified payload in development:",
-          lastError instanceof Error ? lastError.message : String(lastError)
-        );
         const exp = payload.exp ?? 0;
         if (exp <= nowInSeconds) {
           return { valid: false, needsRefresh: false, expiresAt: exp };
@@ -190,20 +249,21 @@ export async function verifyAccessToken(
           expiresAt: exp,
         };
       } catch {
-        return { valid: false, needsRefresh: false };
+        // try next candidate
       }
     }
-
+    // Signature verification against secret failed
     return { valid: false, needsRefresh: false };
-  } else {
-    // Development fallback when SUPABASE_JWT_SECRET is not configured
+  }
+
+  // 4. In development/testing fallback: validate unexpired payload
+  if (process.env.NODE_ENV !== "production") {
     try {
       const payload = decodeJwt(token);
       const exp = payload.exp ?? 0;
       if (exp <= nowInSeconds) {
         return { valid: false, needsRefresh: false, expiresAt: exp };
       }
-
       const needsRefresh = exp - nowInSeconds < 120;
       return {
         valid: true,
@@ -215,4 +275,6 @@ export async function verifyAccessToken(
       return { valid: false, needsRefresh: false };
     }
   }
+
+  return { valid: false, needsRefresh: false };
 }
