@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import {
   AlertTriangle,
   CheckSquare,
   ChevronRight,
+  Loader2,
   MessageSquareMore,
   Plus,
   TrendingUp,
@@ -32,7 +33,6 @@ import type {
 } from "@/lib/types";
 import type { DashboardSnapshot } from "@/lib/services/dashboard-snapshot";
 import { Button } from "@/components/ui/button";
-import { GlassSkeleton } from "@/components/ui/glass-skeleton";
 
 function shiftHours(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(":").map(Number);
@@ -59,45 +59,43 @@ export default function DashboardClient({
   const isBasicUser = !hasRole("user_lead", "admin", "super_admin");
   const { employees: shellEmployees, unreadChatCount: shellChatCount } = useShellData();
 
-  // Synchronously seed the SWR memory cache before child components mount (once per snapshot)
-  const hydratedRef = useRef<string | null>(null);
-  const snapshotKey = initialSnapshot
-    ? `${initialSnapshot.timestamp}:${locationId}:${user?.id ?? "anonymous"}:${initialWeekStartStr}`
-    : null;
+  // Synchronously seed the SWR memory cache before child components mount (once on initial render)
+  useState(() => {
+    if (initialSnapshot) {
+      hydrateCache(
+        {
+          employees: initialSnapshot.employees,
+          [`shifts:week:${initialWeekStartStr}`]: initialSnapshot.schedule,
+          "tasks:dashboard": initialSnapshot.tasks,
+          "tasks:all": initialSnapshot.tasks,
+          ...(user?.employeeId
+            ? {
+                [`tasks:my:${user.employeeId}`]: initialSnapshot.tasks.filter(
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (t: any) =>
+                    t.assigneeId === user.employeeId ||
+                    t.createdBy === user.employeeId
+                ),
+              }
+            : {}),
+          channels: initialSnapshot.channels,
+          "sales:today": initialSnapshot.sales,
+          "alerts:dashboard": initialSnapshot.alerts,
+          "activity:dashboard": initialSnapshot.activity,
+        },
+        { locationId, userId: user?.id }
+      );
+    }
+  });
 
-  if (initialSnapshot && hydratedRef.current !== snapshotKey) {
-    hydratedRef.current = snapshotKey;
-    hydrateCache(
-      {
-        employees: initialSnapshot.employees,
-        [`shifts:week:${initialWeekStartStr}`]: initialSnapshot.schedule,
-        "tasks:dashboard": initialSnapshot.tasks,
-        "tasks:all": initialSnapshot.tasks,
-        ...(user?.employeeId
-          ? {
-              [`tasks:my:${user.employeeId}`]: initialSnapshot.tasks.filter(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (t: any) =>
-                  t.assigneeId === user.employeeId ||
-                  t.createdBy === user.employeeId
-              ),
-            }
-          : {}),
-        channels: initialSnapshot.channels,
-        "sales:today": initialSnapshot.sales,
-        "alerts:dashboard": initialSnapshot.alerts,
-        "activity:dashboard": initialSnapshot.activity,
-      },
-      { locationId, userId: user?.id }
-    );
-  }
+  const isClient = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const todayKey = new Date().toISOString().split("T")[0];
+  const [currentTime] = useState(() => Date.now());
+  const [todayKey] = useState(() => new Date().toISOString().split("T")[0]);
   const weekStartStr = initialWeekStartStr;
 
   const { data: scheduleData, isLoading: scheduleLoading } = useCachedQuery<WeekSchedule>(
@@ -109,29 +107,33 @@ export default function DashboardClient({
   const weekShifts = useMemo(() => rawShifts ?? [], [rawShifts]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: logs = initialSnapshot?.tasks ?? [] } = useCachedQuery<any[]>(
+  const { data: logs, isLoading: tasksLoading } = useCachedQuery<any[]>(
     "tasks:dashboard",
     (signal) => getTasks(locationId, undefined, signal),
     { locationId, userId: user?.id }
   );
+  const taskList = logs ?? initialSnapshot?.tasks ?? [];
 
-  const { data: initialSales = initialSnapshot?.sales ?? [] } = useCachedQuery<SalesDay[]>(
+  const { data: initialSales, isLoading: salesLoading } = useCachedQuery<SalesDay[]>(
     "sales:today",
     (signal) => getSales(locationId, 1, signal),
     { locationId, userId: user?.id }
   );
+  const salesList = initialSales ?? initialSnapshot?.sales ?? [];
 
-  const { data: cachedAlerts = initialSnapshot?.alerts ?? [] } = useCachedQuery<DashboardAlert[]>(
+  const { data: cachedAlerts, isLoading: alertsLoading } = useCachedQuery<DashboardAlert[]>(
     "alerts:dashboard",
     (signal) => getAlerts(locationId, signal),
     { locationId, userId: user?.id }
   );
+  const currentAlerts = cachedAlerts ?? initialSnapshot?.alerts ?? [];
 
-  const { data: cachedActivity = initialSnapshot?.activity ?? [] } = useCachedQuery<EmployeeActivityItem[]>(
+  const { data: cachedActivity, isLoading: activityLoading } = useCachedQuery<EmployeeActivityItem[]>(
     "activity:dashboard",
     (signal) => getActivity(locationId, 5, signal),
     { locationId, userId: user?.id }
   );
+  const currentActivity = cachedActivity ?? initialSnapshot?.activity ?? [];
 
   const employeesCount =
     shellEmployees.length > 0
@@ -143,14 +145,16 @@ export default function DashboardClient({
       ? shellChatCount
       : initialSnapshot?.channels.reduce((sum, ch) => sum + (ch.unreadCount ?? 0), 0) ?? 0;
 
-  const currentSales = initialSales[0] ?? null;
-  const currentAlerts = cachedAlerts;
-  const currentActivity = cachedActivity;
+  const isSalesLoading = (!isClient && !initialSnapshot) || (salesLoading && salesList.length === 0);
+  const isScheduleLoading = (!isClient && !initialSnapshot) || (scheduleLoading && weekShifts.length === 0);
+  const isTasksLoading = (!isClient && !initialSnapshot) || (tasksLoading && taskList.length === 0);
+  const isMessagesLoading = !isClient && !initialSnapshot;
 
-  // Zero-skeleton initial paint when initialSnapshot is primed
-  const loading =
-    (!mounted && !initialSnapshot) ||
-    (scheduleLoading && !scheduleData && weekShifts.length === 0);
+  const currentSales = salesList.length > 0 ? salesList[0] : null;
+  const hasSalesData = currentSales !== null && currentSales !== undefined;
+  const hasScheduleData = weekShifts.length > 0 || employeesCount > 0;
+  const hasTasksData = taskList.length > 0;
+  const hasMessagesData = shellChatCount > 0 || (initialSnapshot?.channels && initialSnapshot.channels.length > 0);
 
   const todayShifts = useMemo(
     () => weekShifts.filter((shift) => shift.date === todayKey),
@@ -158,10 +162,10 @@ export default function DashboardClient({
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const openTasks = logs.filter((task: any) => task.status !== "done");
+  const openTasks = taskList.filter((task: any) => task.status !== "done");
   const overdueTasks = openTasks.filter(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (task: any) => task.dueTime && new Date(task.dueTime).getTime() < Date.now()
+    (task: any) => task.dueTime && new Date(task.dueTime).getTime() < currentTime
   );
   const staffOnShift = new Set(todayShifts.map((shift) => shift.employeeId)).size;
   const shiftLeaderCoverage = todayShifts.some((shift) => shift.role === "shiftleader");
@@ -193,6 +197,8 @@ export default function DashboardClient({
           dueNow: "Förfaller nu",
           unread: "Olästa uppdateringar",
           noSales: "Ingen försäljningsdata idag",
+          loading: "Laddar...",
+          noData: "Ingen data",
         }
       : {
           sales: "Sales today",
@@ -215,18 +221,22 @@ export default function DashboardClient({
           dueNow: "Due now",
           unread: "Unread updates",
           noSales: "No sales data for today",
+          loading: "Loading...",
+          noData: "No data",
         };
 
   const cards = [
     {
       title: copy.sales,
+      loading: isSalesLoading,
+      hasData: hasSalesData,
       value: currentSales
         ? new Intl.NumberFormat("sv-SE", {
             style: "currency",
             currency: "SEK",
             maximumFractionDigits: 0,
           }).format(currentSales.revenue)
-        : "—",
+        : copy.noData,
       note: currentSales
         ? `${currentSales.orders} orders • ${currentSales.peakLabel}`
         : copy.noSales,
@@ -237,8 +247,16 @@ export default function DashboardClient({
     },
     {
       title: copy.team,
-      value: `${staffOnShift}/${Math.max(employeesCount, staffOnShift)}`,
-      note: shiftLeaderCoverage ? copy.leaderReady : copy.noLeader,
+      loading: isScheduleLoading,
+      hasData: hasScheduleData,
+      value: hasScheduleData
+        ? `${staffOnShift}/${Math.max(employeesCount, staffOnShift)}`
+        : copy.noData,
+      note: hasScheduleData
+        ? shiftLeaderCoverage
+          ? copy.leaderReady
+          : copy.noLeader
+        : copy.noData,
       status: shiftLeaderCoverage ? "status-success" : "status-danger",
       actionHref: "/schedule",
       actionLabel: copy.open,
@@ -246,8 +264,10 @@ export default function DashboardClient({
     },
     {
       title: copy.tasks,
-      value: `${openTasks.length}`,
-      note: `${overdueTasks.length} ${copy.dueNow}`,
+      loading: isTasksLoading,
+      hasData: hasTasksData,
+      value: hasTasksData ? `${openTasks.length}` : copy.noData,
+      note: hasTasksData ? `${overdueTasks.length} ${copy.dueNow}` : copy.noData,
       status: statusClass(overdueTasks.length, 1, 2),
       actionHref: "/logs",
       actionLabel: copy.review,
@@ -255,39 +275,16 @@ export default function DashboardClient({
     },
     {
       title: copy.messages,
-      value: `${unreadChatCount}`,
-      note: copy.unread,
+      loading: isMessagesLoading,
+      hasData: hasMessagesData,
+      value: hasMessagesData ? `${unreadChatCount}` : copy.noData,
+      note: hasMessagesData ? copy.unread : copy.noData,
       status: statusClass(unreadChatCount, 2, 4),
       actionHref: "/chat",
       actionLabel: copy.open,
       icon: MessageSquareMore,
     },
   ];
-
-  // Hydration barrier only for unhydrated cold renders without snapshot
-  if (!mounted && !initialSnapshot) {
-    return (
-      <div className="space-y-6">
-        <section className="app-panel p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              <GlassSkeleton className="h-6 w-48" />
-              <GlassSkeleton className="h-4 w-96 max-w-full" />
-            </div>
-            <div className="toolbar-row">
-              <GlassSkeleton className="h-10 w-28 rounded-xl" />
-              <GlassSkeleton className="h-10 w-28 rounded-xl" />
-            </div>
-          </div>
-        </section>
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <GlassSkeleton key={i} className="h-32 rounded-2xl" />
-          ))}
-        </section>
-      </div>
-    );
-  }
 
   // Simplified dashboard for basic user role
   if (isBasicUser) {
@@ -311,15 +308,14 @@ export default function DashboardClient({
             </div>
           </div>
           <div className="mt-4 list-block">
-            {loading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <GlassSkeleton key={i} className="h-12" />
-              ))
+            {isScheduleLoading ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                <span>{copy.loading}</span>
+              </div>
             ) : myShifts.length === 0 ? (
               <div className="px-4 py-6 text-center text-sm text-slate-500">
-                {lang === "sv"
-                  ? "Inga pass den här veckan."
-                  : "No shifts scheduled this week."}
+                {copy.noData}
               </div>
             ) : (
               myShifts.map((shift) => (
@@ -357,13 +353,14 @@ export default function DashboardClient({
             </Button>
           </div>
           <div className="mt-4 list-block">
-            {loading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <GlassSkeleton key={i} className="h-12" />
-              ))
+            {activityLoading && currentActivity.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                <span>{copy.loading}</span>
+              </div>
             ) : currentActivity.length === 0 ? (
               <div className="px-4 py-6 text-center text-sm text-slate-500">
-                {lang === "sv" ? "Ingen aktivitet ännu." : "No activity yet."}
+                {copy.noData}
               </div>
             ) : (
               currentActivity.map((item) => (
@@ -422,38 +419,51 @@ export default function DashboardClient({
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {loading
-          ? Array.from({ length: 4 }).map((_, index) => (
-              <GlassSkeleton key={index} className="h-40" />
-            ))
-          : cards.map((card) => {
-              const Icon = card.icon;
-              return (
-                <div key={card.title} className="metric-card">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="metric-label">{card.title}</div>
-                    <div className={`status-chip ${card.status}`}>
-                      <Icon className="h-3.5 w-3.5" />
-                    </div>
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.title} className="metric-card">
+              <div className="flex items-center justify-between gap-3">
+                <div className="metric-label">{card.title}</div>
+                <div className={`status-chip ${card.status}`}>
+                  <Icon className="h-3.5 w-3.5" />
+                </div>
+              </div>
+              {card.loading ? (
+                <div className="my-3 flex items-center gap-2 py-1 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                  <span>{copy.loading}</span>
+                </div>
+              ) : !card.hasData ? (
+                <div className="my-3 py-1">
+                  <div className="text-xl font-semibold text-slate-400">
+                    {copy.noData}
                   </div>
+                  <div className="metric-note mt-1">{card.note}</div>
+                </div>
+              ) : (
+                <>
                   <div className="metric-value">{card.value}</div>
                   <div className="metric-note">{card.note}</div>
-                  <div className="mt-4">
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="outline"
-                      className="w-full justify-between"
-                    >
-                      <Link href={card.actionHref}>
-                        {card.actionLabel}
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
+                </>
+              )}
+              <div className="mt-4">
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="w-full justify-between"
+                  disabled={card.loading}
+                >
+                  <Link href={card.actionHref}>
+                    {card.actionLabel}
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          );
+        })}
       </section>
 
       <section className="space-y-4">
@@ -471,23 +481,34 @@ export default function DashboardClient({
             </Button>
           </div>
           <div className="mt-4 list-block">
-            {currentAlerts.slice(0, 3).map((alert) => (
-              <div
-                key={alert.id}
-                className={`list-row ${alert.tone === "critical" ? "surface-danger" : alert.tone === "warning" ? "surface-warning" : "surface-info"}`}
-              >
-                <div className="list-row-main">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-current" />
-                    <div className="list-row-title">{alert.title}</div>
-                  </div>
-                  <div className="list-row-copy">{alert.message}</div>
-                </div>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/logs">{copy.review}</Link>
-                </Button>
+            {alertsLoading && currentAlerts.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                <span>{copy.loading}</span>
               </div>
-            ))}
+            ) : currentAlerts.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-slate-500">
+                {copy.noData}
+              </div>
+            ) : (
+              currentAlerts.slice(0, 3).map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`list-row ${alert.tone === "critical" ? "surface-danger" : alert.tone === "warning" ? "surface-warning" : "surface-info"}`}
+                >
+                  <div className="list-row-main">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-current" />
+                      <div className="list-row-title">{alert.title}</div>
+                    </div>
+                    <div className="list-row-copy">{alert.message}</div>
+                  </div>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/logs">{copy.review}</Link>
+                  </Button>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -506,27 +527,33 @@ export default function DashboardClient({
             </Button>
           </div>
           <div className="mt-4 list-block">
-            {currentActivity.map((item) => (
-              <div key={item.id} className="list-row">
-                <div className="list-row-main">
-                  <div className="list-row-title">{item.title}</div>
-                  <div className="list-row-copy">{item.detail}</div>
-                </div>
-                <div
-                  className="text-xs text-slate-500"
-                  suppressHydrationWarning
-                >
-                  {new Date(item.timestamp).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
+            {activityLoading && currentActivity.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                <span>{copy.loading}</span>
               </div>
-            ))}
-            {currentActivity.length === 0 && !loading && (
+            ) : currentActivity.length === 0 ? (
               <div className="px-4 py-6 text-center text-sm text-slate-500">
-                {lang === "sv" ? "Ingen aktivitet ännu." : "No activity yet."}
+                {copy.noData}
               </div>
+            ) : (
+              currentActivity.map((item) => (
+                <div key={item.id} className="list-row">
+                  <div className="list-row-main">
+                    <div className="list-row-title">{item.title}</div>
+                    <div className="list-row-copy">{item.detail}</div>
+                  </div>
+                  <div
+                    className="text-xs text-slate-500"
+                    suppressHydrationWarning
+                  >
+                    {new Date(item.timestamp).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>

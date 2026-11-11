@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -9,11 +10,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
-  const { signIn } = useAuth();
+  const { user, signIn } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+
+  // If already authenticated or when session resolves, redirect immediately
+  useEffect(() => {
+    if (user) {
+      router.replace("/");
+    }
+  }, [user, router]);
 
   async function handleForgotPassword() {
     if (!email.trim()) {
@@ -48,13 +57,13 @@ export default function LoginPage() {
       const error = await signIn(email.trim(), password);
       if (error) {
         toast.error(error);
+        setLoading(false);
         return;
       }
       window.location.href = "/";
     } catch (err) {
       toast.error("An unexpected error occurred. Check the console.");
       console.error("[login]", err);
-    } finally {
       setLoading(false);
     }
   }

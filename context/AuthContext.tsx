@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
-      if (!session) {
+      if (!session?.user) {
         lastVerifiedUserId = null;
         setUser(null);
         setLoading(false);
@@ -90,16 +90,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Re-verify with getUser() — do not trust session.user directly
-      const { data: { user } } = await supabaseClient!.auth.getUser();
-      if (user) {
-        lastVerifiedUserId = user.id;
-        const profile = await fetchProfile(user.id, user.email ?? "");
-        setUser(profile);
-      } else {
-        lastVerifiedUserId = null;
-        setUser(null);
-      }
+      // Use session.user directly to avoid internal navigator.locks deadlock with signInWithPassword
+      const currentUser = session.user;
+      lastVerifiedUserId = currentUser.id;
+      const profile = await fetchProfile(currentUser.id, currentUser.email ?? "");
+      setUser(profile);
       setLoading(false);
     });
 
