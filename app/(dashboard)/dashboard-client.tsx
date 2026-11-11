@@ -59,8 +59,14 @@ export default function DashboardClient({
   const isBasicUser = !hasRole("user_lead", "admin", "super_admin");
   const { employees: shellEmployees, unreadChatCount: shellChatCount } = useShellData();
 
-  // Synchronously seed the SWR memory cache before child components mount
-  if (initialSnapshot) {
+  // Synchronously seed the SWR memory cache before child components mount (once per snapshot)
+  const hydratedRef = useRef<string | null>(null);
+  const snapshotKey = initialSnapshot
+    ? `${initialSnapshot.timestamp}:${locationId}:${user?.id ?? "anonymous"}:${initialWeekStartStr}`
+    : null;
+
+  if (initialSnapshot && hydratedRef.current !== snapshotKey) {
+    hydratedRef.current = snapshotKey;
     hydrateCache(
       {
         employees: initialSnapshot.employees,

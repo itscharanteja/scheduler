@@ -40,7 +40,11 @@ function notifyKey(storageKey: string) {
   const keyListeners = listenersByKey.get(storageKey);
   if (keyListeners) {
     for (const listener of Array.from(keyListeners)) {
-      listener();
+      try {
+        listener();
+      } catch (err) {
+        console.warn(`[swr-cache] Subscriber notification error for ${storageKey}:`, err);
+      }
     }
   }
 }
@@ -204,8 +208,18 @@ export function hydrateCache(
         userId: uid,
         version: CACHE_VERSION,
       };
-      setCacheEntry(storageKey, entry);
+
+      // Directly seed in-memory cache and timestamp without triggering listener store mutations during render
+      memoryCache.set(storageKey, entry);
       lastFetchTimeByKey.set(storageKey, now);
+
+      if (typeof window !== "undefined" && window.localStorage) {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(entry));
+        } catch {
+          // ignore localStorage write errors during initial hydration
+        }
+      }
     }
   });
 }
