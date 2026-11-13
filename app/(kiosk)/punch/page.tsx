@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, LogIn, LogOut, Bookmark, ArrowLeft, CheckCircle } from "lucide-react";
 import type { KioskEmployee, AttendanceSession } from "@/lib/supabase/attendance";
+import { SkiftIcon } from "@/components/skift-icon";
 
 type Screen = "grid" | "confirm" | "done" | "invalid";
 
@@ -233,7 +234,7 @@ function PunchContent() {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[#E8D9CB] bg-[#FFFDFB] px-4 py-3">
         <div className="flex items-center gap-2">
-          <Clock className="h-5 w-5 text-[#8F4B30]" />
+          <SkiftIcon className="h-5 w-5" />
           <span className="font-semibold text-[#30251F]">{locationName || "Punch"}</span>
         </div>
         <span className="text-sm font-mono text-[#756458]">

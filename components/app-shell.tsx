@@ -38,6 +38,7 @@ import { getEmployees, getTasks, getChannels } from "@/lib/supabase";
 import type { Employee } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SkiftIcon } from "@/components/skift-icon";
 
 type NavItem = {
   href: string;
@@ -300,10 +301,7 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
                 onClick={() => handleNavClick("/")}
                 className="inline-flex items-center gap-2 text-2xl font-semibold tracking-[-0.04em] text-[#30251F] active:scale-[0.98] transition-transform duration-75"
               >
-                <svg viewBox="0 0 32 32" fill="none" aria-hidden="true" className="h-6 w-6 text-[#C65B3B]">
-                  <path d="M6 7h8v8H6zM18 7h8v8h-8zM6 19h8v8H6z" fill="currentColor" />
-                  <path d="m21.5 17 6 6-6 6-6-6 6-6Z" fill="#F6BB86" />
-                </svg>
+                <SkiftIcon className="h-6 w-6 shrink-0" />
                 <span>skift<span className="text-[#C65B3B]">.</span></span>
               </Link>
               <span className="status-chip status-neutral">
@@ -514,6 +512,12 @@ function ShellLayout({ children }: { children: React.ReactNode }) {
 
             {mobileNavOpen ? (
               <div className="app-panel mt-4 p-3 lg:hidden">
+                <div className="mb-3 flex items-center gap-2 border-b border-[#E8D9CB] px-2 pb-2">
+                  <SkiftIcon className="h-5 w-5" />
+                  <span className="text-lg font-semibold tracking-[-0.04em] text-[#30251F]">
+                    skift<span className="text-[#C65B3B]">.</span>
+                  </span>
+                </div>
                 <div className="space-y-1">
                   {navItems.map((item) => {
                     const Icon = item.icon;
