@@ -1,6 +1,9 @@
 name: Database Keep-Alive Daemon
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     # Trigger probe every 6 hours to prevent inactivity cold starts
     - cron: '0 */6 * * *'
@@ -11,6 +14,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Keep-Alive Database Probe
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -f -s -i -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.APP_URL }}/api/health/ping"
+          if [ -z "$APP_URL" ]; then
+            echo "::error::GitHub secret 'APP_URL' is missing or empty. Please set APP_URL in Repository Settings > Secrets and variables > Actions (e.g. https://your-deployment-url.com)."
+            exit 1
+          fi
+
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::GitHub secret 'CRON_SECRET' is missing or empty. Please set CRON_SECRET in Repository Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          # Strip any trailing slash from APP_URL
+          CLEAN_URL="${APP_URL%/}"
+
+          echo "Pinging health endpoint at ${CLEAN_URL}/api/health/ping..."
+          curl -f -s -S -i \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${CLEAN_URL}/api/health/ping"
