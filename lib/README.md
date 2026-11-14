@@ -84,8 +84,6 @@ Core business logic, Supabase database client utilities, simulator helpers, and 
 - [types.ts:DraftFieldInput] (interface)
 - [types.ts:UpdateFormPayload] (interface)
 - [types.ts:SubmitFormPayload] (interface)
-- [utils-extra.ts:formatDate] (function)
-- [utils-extra.ts:getWeekStart] (function)
 - [utils.ts:cn] (function)
 - [weather.ts:fetchWeatherFromAPI] (function)
 - [weather.ts:generateWeatherSuggestions] (function)
