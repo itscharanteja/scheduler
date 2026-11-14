@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test test/**/*.test.ts tests/*.test.ts"
+    "test": "node --experimental-strip-types --test test/**/*.test.ts tests/*.test.ts",
+    "validate": "tsc --noEmit && npm run build && npm test",
+    "audit:deadcode": "npx -y knip"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",

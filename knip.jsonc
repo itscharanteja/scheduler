@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "app/**/{page,layout,loading,error,not-found,route}.{ts,tsx}",
+    "middleware.ts",
+    "next.config.ts"
+  ],
+  "project": [
+    "app/**/*.{ts,tsx}",
+    "components/**/*.{ts,tsx}",
+    "lib/**/*.{ts,tsx}",
+    "hooks/**/*.{ts,tsx}"
+  ],
+  "ignore": [
+    "components/ui/**",
+    "**/database.types.ts",
+    "**/types/supabase.ts"
+  ],
+  "ignoreDependencies": [
+    "tw-animate-css"
+  ]
+}
